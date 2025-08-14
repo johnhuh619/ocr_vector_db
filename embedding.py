@@ -249,16 +249,131 @@ TEXT_SPLITTER = RecursiveCharacterTextSplitter(
     add_start_index= True,
 )
 
-def split_code_safely(code: str, max_chars: int=1000, overlap_lines: int = 5):
-    """
-    코드 블록을 문자 길이 기준으로 분할 + line 오버랩으로 문맥 유지
-    """
-
 
 # 유닛 -> chunk 변환
 def build_document_from_unitized(
     path: str,
     unitized: List[Tuple[Optional[str], str, RawSegment]]
 ) -> List[Document]:
+    docs: List[Document] = []
+    base_meta = {"source": os.path.basename(path)}
     
-    return
+    for unit_id, unit_role, seg in unitized:
+        meta = dict(base_meta)
+        meta['order'] = seg.order
+        meta['kind'] = seg.kind
+        if unit_id:
+            meta["unit_id"] = unit_id
+        if unit_role:
+            meta["unit_role"] = unit_role
+        
+        if seg.kind == "text":
+            for chunk in TEXT_SPLITTER._split_text(seg.content):
+                docs.append(Document(page_content=chunk, metadata=meta))
+        else:
+            lang = seg.language or "unknown"
+            lang_meta = {**meta, "lang": lang}
+            for chunk in split_code_safely(seg.content):
+                docs.append(Document(page_content=chunk, metadata=lang_meta))
+    return docs
+
+
+def upsert_batch(store: PGVector, docs: List[Document], batch_size: int=64):
+    for i in range(0, len(docs), batch_size):
+        batch = docs[i:i+batch_size]
+        store.add_documents(batch)
+
+
+# 인덱스
+def ensure_extension_vector():
+    import psycopg
+    with psycopg.connect(PG_CONN.replace("postgresql+psycopg", "postgresql"), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+            
+def ensure_indexes():
+    """pgvector HNSW(cosine) + JSONB GIN + 선택 BTREE 인덱스(메타 equality)"""
+    import psycopg
+    with psycopg.connect(PG_CONN.replace("postgresql+psycopg", "postgresql"), autocommit=True) as conn:
+        with conn.cursor() as cur:
+            tbl = "langchain_pg_embedding"
+
+            # HNSW (코사인)
+            cur.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{COLLECTION}_hnsw_cosine
+                ON {tbl} USING hnsw (embedding vector_cosine_ops);
+            """)
+
+            # 메타데이터 GIN (JSONB)
+            cur.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{COLLECTION}_meta_gin
+                ON {tbl} USING GIN (cmetadata);
+            """)
+
+            # 선택: unit_id/unit_role/lang equality 빠르게
+            cur.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{COLLECTION}_unit_id_btree
+                ON {tbl} ((cmetadata->>'unit_id'));
+            """)
+            cur.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{COLLECTION}_unit_role_btree
+                ON {tbl} ((cmetadata->>'unit_role'));
+            """)
+            cur.execute(f"""
+                CREATE INDEX IF NOT EXISTS idx_{COLLECTION}_lang_btree
+                ON {tbl} ((cmetadata->>'lang'));
+            """)
+            
+            
+            
+def main(input_glob:str):
+    
+    embeddings = VoyageAIEmbeddings(model=EMBEDDING_MODEL)
+    store = PGVector(
+        connection=PG_CONN,
+        embeddings=embeddings,
+        collection_name=COLLECTION,
+        distance_strategy="COSINE",
+        use_jsonb=True,
+        embedding_length=EMBDDING_DIM
+    )
+    
+    files= sorted(glob.glob(input_glob))
+    if not files:
+        print(f"[WARN] No files matched: {input_glob}")
+        return
+    
+    ensure_extension_vector()
+    
+    total_docs= 0
+    for path in files:
+        print(f"[parse] {path}")
+        segs = parse_ocr_file(path)
+        
+        unitized = unitize_txt_py_js_streaming(
+            segs,
+            attach_pre_text=True,
+            attach_post_text=False,
+            bridge_text_max=0           
+        )
+        
+        docs = build_document_from_unitized(path, unitized)
+        if not docs:
+            continue
+        
+        print(f"[upsert] {os.path.basename(path)} -> {len(docs)} chunks")
+        upsert_batch(store,docs)
+        total_docs += len(docs)
+        
+    
+    print(f"[done] total chunks: {total_docs}")
+    print("[index] creating indexes (idempotent:멱등성)")
+    ensure_indexes()
+    print("[ok] all set")
+    
+    
+# 일단 txt라고 가정하고 구현했다.
+if __name__ == '__main__':
+    import sys
+    glob_args = sys.argv[1] if len(sys.argv) > 1 else "test/*.txt"
+    main(glob_args)
