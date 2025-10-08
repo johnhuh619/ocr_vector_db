@@ -1,0 +1,75 @@
+from typing import List, Optional
+
+from langchain_core.documents import Document
+
+from .models import EmbeddingConfig
+
+
+class GeminiEmbeddings:
+    """Thin adapter around Google Gemini embedding endpoints."""
+
+    def __init__(self, model: str = "text-embedding-004", api_key: Optional[str] = None):
+        import os
+
+        import google.generativeai as genai  # type: ignore
+
+        key = api_key or os.getenv("GOOGLE_API_KEY")
+        if not key:
+            raise RuntimeError("GOOGLE_API_KEY is required for GEMINI embeddings")
+        genai.configure(api_key=key)
+        self._genai = genai
+        self._model = model
+
+    @staticmethod
+    def _extract_vec(response) -> List[float]:
+        if isinstance(response, dict):
+            embedding = response.get("embedding") or (response.get("data") or {}).get("embedding")
+        else:
+            embedding = getattr(response, "embedding", None)
+        if not isinstance(embedding, (list, tuple)):
+            raise RuntimeError("Gemini embedding response missing 'embedding'")
+        return [float(x) for x in embedding]
+
+    def _embed_one(self, text: str, task: str) -> List[float]:
+        response = self._genai.embed_content(model=self._model, content=text, task_type=task)
+        return self._extract_vec(response)
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return [self._embed_one(text, task="retrieval_document") for text in texts]
+
+    def embed_query(self, text: str) -> List[float]:
+        return self._embed_one(text, task="retrieval_query")
+
+
+class EmbeddingProviderFactory:
+    """Factory for producing embedding clients based on configuration."""
+
+    @staticmethod
+    def create(config: EmbeddingConfig):
+        if config.embedding_provider == "gemini":
+            return GeminiEmbeddings(model=config.gemini_model)
+        from langchain_voyageai import VoyageAIEmbeddings  # type: ignore
+
+        return VoyageAIEmbeddings(model=config.embedding_model)
+
+
+def validate_embedding_dimension(embeddings, expected: int) -> None:
+    try:
+        vectors = embeddings.embed_documents(["__dim_check__"])
+        if not vectors or not isinstance(vectors, list) or not isinstance(vectors[0], (list, tuple)):
+            print("[warn] Unable to validate embedding dimension (unexpected response)")
+            return
+        actual = len(vectors[0])
+        if actual != expected:
+            print(f"[WARN] EMBEDDING_DIM mismatch: expected {expected}, model produced {actual}")
+    except Exception as exc:
+        print(f"[warn] Skipping dimension validation: {exc}")
+
+
+def compute_doc_id(document: Document) -> str:
+    from .utils import HashingService
+
+    return HashingService.compute_doc_id(document)
+
+
+__all__ = ["EmbeddingProviderFactory", "GeminiEmbeddings", "validate_embedding_dimension", "compute_doc_id"]
