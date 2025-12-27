@@ -1,0 +1,30 @@
+Page 1
+# Introduction
+
+This is preface text that should be associated with the upcoming Python code block.
+
+```python
+def add(a, b):
+    return a + b
+
+class Greeter:
+    def hello(self, name):
+        return f"Hello, {name}!"
+```
+
+Some bridge text between Python and JavaScript blocks.
+
+```javascript
+function foo(x) { return x * 2; }
+const bar = (y) => y + 3;
+```
+
+Figure 1: Example diagram of flow
+
+---
+
+page 2
+## Advanced Topic
+
+Further explanatory text for the advanced topic section.
+

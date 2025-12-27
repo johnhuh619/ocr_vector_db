@@ -1,7 +1,7 @@
 import hashlib
 import re
 import unicodedata
-from typing import Optional
+from typing import Optional, Sequence
 
 from langchain_core.documents import Document
 
@@ -25,7 +25,9 @@ class HashingService:
         lang = document.metadata.get("lang")
         ch = cls.content_hash(pid, view, lang, document.page_content or "")
         document.metadata["content_hash"] = ch
-        return f"doc:{ch}"
+        doc_id = f"doc:{ch}"
+        document.metadata["doc_id"] = doc_id
+        return doc_id
 
 
 class Slugifier:
@@ -42,4 +44,9 @@ class Slugifier:
         return value
 
 
-__all__ = ["HashingService", "Slugifier"]
+def format_vector_literal(vector: Sequence[float]) -> str:
+    """Represent a numeric vector as a Postgres-compatible literal."""
+    return "[" + ",".join(str(float(value)) for value in vector) + "]"
+
+
+__all__ = ["HashingService", "Slugifier", "format_vector_literal"]

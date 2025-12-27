@@ -1,7 +1,7 @@
 import sys
 from typing import Optional
 
-from embedding import EmbeddingPipeline, load_config
+from app import EmbeddingPipeline, load_config
 
 
 def main(input_glob: Optional[str] = None) -> None:

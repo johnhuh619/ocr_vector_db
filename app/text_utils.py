@@ -6,14 +6,15 @@ class TextPreprocessor:
     """High-level text preprocessing helpers for OCR/markdown content."""
 
     NORMALIZE_MAP = {
-        "ﬁ": "fi",
-        "ﬂ": "fl",
-        "’": "'",
-        "‘": "'",
-        "“": '"',
-        "”": '"',
-        "–": "-",
-        "—": "-",
+        "\uFB03": "ffi",
+        "\uFB01": "fi",
+        "\uFB02": "fl",
+        "\u2019": "'",
+        "\u2018": "'",
+        "\u201C": '"',
+        "\u201D": '"',
+        "\u2013": "-",
+        "\u2014": "-",
     }
 
     CODE_HINT = re.compile(

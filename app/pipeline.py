@@ -9,7 +9,7 @@ from typing import List, Optional, Sequence, Tuple
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from .embeddings_provider import EmbeddingProviderFactory, validate_embedding_dimension
+from .embeddings_provider import compute_doc_id, EmbeddingProviderFactory, validate_embedding_dimension
 from .models import EmbeddingConfig, RawSegment, UnitizedSegment
 from .parents import ParentDocumentBuilder
 from .parsers import MarkdownParser, OcrParser, PdfExtractor, SegmentUnitizer
@@ -117,7 +117,17 @@ class EmbeddingPipeline:
 
     def run(self, pattern: str) -> None:
         embeddings = EmbeddingProviderFactory.create(self.config)
-        validate_embedding_dimension(embeddings, self.config.embedding_dim)
+        model_name = (
+            self.config.embedding_model
+            if self.config.embedding_provider != "gemini"
+            else self.config.gemini_model
+        )
+        validate_embedding_dimension(
+            embeddings,
+            self.config.embedding_dim,
+            provider=self.config.embedding_provider,
+            model=model_name,
+        )
         self.schema_manager.apply_db_level_tuning()
 
         store = self._create_vector_store(embeddings)
@@ -132,8 +142,11 @@ class EmbeddingPipeline:
         if self.config.custom_schema_write:
             self.schema_manager.ensure_custom_schema(self.config.embedding_dim)
 
-        total_docs = 0
+        chunk_total = 0
+        vector_total = 0
         parent_total = 0
+        custom_parent_total = 0
+        custom_child_total = 0
         for path in files:
             print(f"[parse] {path}")
             segments = self._parse_file(path)
@@ -157,12 +170,18 @@ class EmbeddingPipeline:
             except Exception as exc:
                 print(f"[warn] parent assign skipped for {os.path.basename(path)}: {exc}")
 
+            for doc in documents:
+                compute_doc_id(doc)
+
             parents = self.parent_builder.build_parent_entries(documents)
-            self.repository.upsert_parents(parents)
-            parent_total += len(parents)
+            parent_total += self.repository.upsert_parents(parents)
 
             if self.config.custom_schema_write:
-                self.repository.dual_write_custom_schema(embeddings, parents, documents)
+                custom_parents, custom_children = self.repository.dual_write_custom_schema(
+                    embeddings, parents, documents
+                )
+                custom_parent_total += custom_parents
+                custom_child_total += custom_children
 
             docs_to_write = documents
             if self.config.max_docs_to_embed > 0:
@@ -173,11 +192,16 @@ class EmbeddingPipeline:
             else:
                 print(f"[upsert] {os.path.basename(path)} -> {len(documents)} chunks")
 
-            self.vector_writer.upsert_batch(store, docs_to_write)
-            total_docs += len(documents)
+            vector_total += self.vector_writer.upsert_batch(store, docs_to_write)
+            chunk_total += len(documents)
 
-        print(f"[done] total chunks: {total_docs}")
-        print(f"[done] total parents: {parent_total}")
+        print(f"[done] total chunk documents: {chunk_total}")
+        print(f"[done] total vector writes: {vector_total}")
+        print(f"[done] parent rows upserted: {parent_total}")
+        if self.config.custom_schema_write:
+            print(
+                f"[done] custom schema parents: {custom_parent_total}, child chunks: {custom_child_total}"
+            )
         print("[index] creating indexes (idempotent)")
         self.schema_manager.ensure_indexes()
         print("[ok] all set")

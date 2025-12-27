@@ -11,3 +11,7 @@ __pycache__/
 .DS_Store
 .idea/
 .vscode/
+
+docs_for_user/
+
+pdf_data/

@@ -53,7 +53,19 @@ class EmbeddingProviderFactory:
         return VoyageAIEmbeddings(model=config.embedding_model)
 
 
-def validate_embedding_dimension(embeddings, expected: int) -> None:
+def validate_embedding_dimension(
+    embeddings,
+    expected: int,
+    *,
+    provider: Optional[str] = None,
+    model: Optional[str] = None,
+) -> None:
+    label_parts = []
+    if provider:
+        label_parts.append(provider)
+    if model:
+        label_parts.append(model)
+    label = ":".join(label_parts) if label_parts else "embedding-provider"
     try:
         vectors = embeddings.embed_documents(["__dim_check__"])
         if not vectors or not isinstance(vectors, list) or not isinstance(vectors[0], (list, tuple)):
@@ -61,9 +73,11 @@ def validate_embedding_dimension(embeddings, expected: int) -> None:
             return
         actual = len(vectors[0])
         if actual != expected:
-            print(f"[WARN] EMBEDDING_DIM mismatch: expected {expected}, model produced {actual}")
+            print(
+                f"[WARN] EMBEDDING_DIM mismatch for {label}: expected {expected}, received {actual}"
+            )
     except Exception as exc:
-        print(f"[warn] Skipping dimension validation: {exc}")
+        print(f"[warn] Skipping dimension validation for {label}: {exc}")
 
 
 def compute_doc_id(document: Document) -> str:

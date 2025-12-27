@@ -5,41 +5,49 @@ from dotenv import load_dotenv
 from langchain_postgres import PGVector
 from langchain.retrievers.multi_vector import MultiVectorRetriever
 
+from app import build_embeddings, get_config
+from app.storage import DbSchemaManager
+
 
 load_dotenv()
+CONFIG = get_config()
+PG_CONN = CONFIG.pg_conn
+COLLECTION = CONFIG.collection_name
+EMBEDDING_DIM = CONFIG.embedding_dim
 
-PG_CONN = os.getenv("PG_CONN")
-COLLECTION = os.getenv("COLLECTION_NAME")
-EMBEDDING_MODEL = os.getenv("VOYAGE_MODEL", "voyage-3")
-EMBDDING_DIM = int(os.getenv("EMBEDDING_DIM", "1024"))
-EMBEDDING_PROVIDER = os.getenv("EMBEDDING_PROVIDER", "voyage").lower()
-GEMINI_EMBED_MODEL = os.getenv("GEMINI_EMBED_MODEL", "text-embedding-004")
-if not os.getenv("EMBEDDING_DIM") and EMBEDDING_PROVIDER == "gemini":
-    EMBDDING_DIM = 768
 
-from embedding import build_embeddings
+def _plain_conn_str(conn: str) -> str:
+    return (conn or "").replace("postgresql+psycopg", "postgresql")
 
 
 def maybe_apply_db_level_tuning():
-    """Try ALTER DATABASE defaults for ANN params if envs set (requires privileges)."""
+    """Apply ANN-related ALTER DATABASE defaults if configured (requires privileges)."""
+    manager = DbSchemaManager(CONFIG)
+    manager.apply_db_level_tuning()
+
+
+def inspect_db_level_tuning() -> None:
+    """Print current ANN-related database settings for quick diagnostics."""
     import psycopg
-    ivf = os.getenv("IVFFLAT_PROBES")
-    ef_s = os.getenv("HNSW_EF_SEARCH")
-    ef_c = os.getenv("HNSW_EF_CONSTRUCTION")
-    if not any([ivf, ef_s, ef_c]):
-        return
+
+    settings = ["ivfflat.probes", "hnsw.ef_search", "hnsw.ef_construction"]
     try:
-        conn_str = PG_CONN.replace("postgresql+psycopg", "postgresql")
-        with psycopg.connect(conn_str, autocommit=True) as conn:
+        with psycopg.connect(_plain_conn_str(PG_CONN)) as conn:
             with conn.cursor() as cur:
-                if ivf:
-                    cur.execute(f"ALTER DATABASE CURRENT SET ivfflat.probes = {int(ivf)};")
-                if ef_s:
-                    cur.execute(f"ALTER DATABASE CURRENT SET hnsw.ef_search = {int(ef_s)};")
-                if ef_c:
-                    cur.execute(f"ALTER DATABASE CURRENT SET hnsw.ef_construction = {int(ef_c)};")
-    except Exception as e:
-        print(f"[warn] DB-level tuning not applied: {e}")
+                cur.execute(
+                    "SELECT name, setting FROM pg_settings WHERE name = ANY(%s) ORDER BY name",
+                    (settings,),
+                )
+                rows = cur.fetchall()
+    except Exception as exc:
+        print(f"[warn] Unable to read ANN settings: {exc}")
+        return
+    if not rows:
+        print("[diag] ANN settings not found in pg_settings (extension not loaded?)")
+        return
+    print("[diag] Current ANN defaults:")
+    for name, setting in rows:
+        print(f"  - {name} = {setting}")
 
 class PostgresByteStore:
     """Minimal key-bytes DocStore adapter backed by Postgres.
@@ -50,13 +58,14 @@ class PostgresByteStore:
     """
 
     def __init__(self, conn_str: str, table: str = "docstore_parent", key_col: str = "id", val_col: str = "content"):
-        self.conn_str = conn_str.replace("postgresql+psycopg", "postgresql")
+        self.conn_str = _plain_conn_str(conn_str)
         self.table = table
         self.key_col = key_col
         self.val_col = val_col
 
     def mset(self, items: Iterable[Tuple[str, bytes]]):
         import psycopg
+
         sql = f"""
         INSERT INTO {self.table} ({self.key_col}, {self.val_col})
         VALUES (%s, %s)
@@ -68,6 +77,7 @@ class PostgresByteStore:
 
     def mget(self, keys: List[str]) -> List[Optional[bytes]]:
         import psycopg
+
         sql = f"SELECT {self.key_col}, {self.val_col} FROM {self.table} WHERE {self.key_col} = ANY(%s)"
         with psycopg.connect(self.conn_str) as conn:
             with conn.cursor() as cur:
@@ -79,13 +89,14 @@ class PostgresByteStore:
 def build_retriever():
     embeddings = build_embeddings()
     maybe_apply_db_level_tuning()
+    inspect_db_level_tuning()
     vectorstore = PGVector(
         connection=PG_CONN,
         collection_name=COLLECTION,
         embeddings=embeddings,
         distance_strategy="COSINE",
         use_jsonb=True,
-        embedding_length=EMBDDING_DIM,
+        embedding_length=EMBEDDING_DIM,
     )
 
     docstore = PostgresByteStore(PG_CONN)

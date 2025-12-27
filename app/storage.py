@@ -9,7 +9,7 @@ from langchain_core.documents import Document
 from .embeddings_provider import compute_doc_id
 from .models import EmbeddingConfig, ParentDocument
 from .parsers import iter_by_char_budget
-from .utils import HashingService
+from .utils import HashingService, format_vector_literal
 
 
 class DbSchemaManager:
@@ -25,25 +25,20 @@ class DbSchemaManager:
     def apply_db_level_tuning(self) -> None:
         if not self.config.pg_conn:
             return
-        if not any(
-            [self.config.ivfflat_probes, self.config.hnsw_ef_search, self.config.hnsw_ef_construction]
-        ):
+        params = {
+            "ivfflat.probes": self.config.ivfflat_probes,
+            "hnsw.ef_search": self.config.hnsw_ef_search,
+            "hnsw.ef_construction": self.config.hnsw_ef_construction,
+        }
+        values = {name: value for name, value in params.items() if value is not None}
+        if not values:
             return
         try:
             with psycopg.connect(self._pg_conn, autocommit=True) as conn:
                 with conn.cursor() as cur:
-                    if self.config.ivfflat_probes is not None:
-                        cur.execute(
-                            f"ALTER DATABASE CURRENT SET ivfflat.probes = {int(self.config.ivfflat_probes)};"
-                        )
-                    if self.config.hnsw_ef_search is not None:
-                        cur.execute(
-                            f"ALTER DATABASE CURRENT SET hnsw.ef_search = {int(self.config.hnsw_ef_search)};"
-                        )
-                    if self.config.hnsw_ef_construction is not None:
-                        cur.execute(
-                            f"ALTER DATABASE CURRENT SET hnsw.ef_construction = {int(self.config.hnsw_ef_construction)};"
-                        )
+                    for setting, value in values.items():
+                        cur.execute(f"ALTER DATABASE CURRENT SET {setting} = {int(value)};")
+                        print(f"[tuning] set {setting}={int(value)}")
         except Exception as exc:
             print(f"[warn] DB-level tuning not applied: {exc}")
 
@@ -107,7 +102,7 @@ class DbSchemaManager:
     def ensure_parent_docstore(self) -> None:
         if not self.config.pg_conn:
             return
-        sql_statements = [
+        statements = [
             """
             CREATE TABLE IF NOT EXISTS docstore_parent (
               id         text PRIMARY KEY,
@@ -123,7 +118,8 @@ class DbSchemaManager:
             BEGIN
               NEW.updated_at = now();
               RETURN NEW;
-            END; $$ LANGUAGE plpgsql;
+            END;
+            $$ LANGUAGE plpgsql;
             """,
             "DROP TRIGGER IF EXISTS trg_docstore_parent_updated ON docstore_parent;",
             """
@@ -138,22 +134,22 @@ class DbSchemaManager:
         ]
         with psycopg.connect(self._pg_conn, autocommit=True) as conn:
             with conn.cursor() as cur:
-                for sql in sql_statements:
+                for sql in statements:
                     cur.execute(sql)
 
     def ensure_custom_schema(self, embedding_dim: int) -> None:
         if not self.config.pg_conn:
             return
-        sql_statements = [
+        statements = [
             f"""
             CREATE TABLE IF NOT EXISTS child_chunks (
-              id         BIGSERIAL PRIMARY KEY,
-              parent_id  TEXT NOT NULL,
-              view       TEXT,
-              lang       TEXT,
-              content    TEXT NOT NULL,
+              id           BIGSERIAL PRIMARY KEY,
+              parent_id    TEXT NOT NULL,
+              view         TEXT,
+              lang         TEXT,
+              content      TEXT NOT NULL,
               content_hash TEXT,
-              embedding  vector({embedding_dim}) NOT NULL
+              embedding    vector({embedding_dim}) NOT NULL
             );
             """,
             """
@@ -186,7 +182,8 @@ class DbSchemaManager:
             BEGIN
               NEW.updated_at = now();
               RETURN NEW;
-            END; $$ LANGUAGE plpgsql;
+            END;
+            $$ LANGUAGE plpgsql;
             """,
             "DROP TRIGGER IF EXISTS trg_parent_docs_updated ON parent_docs;",
             """
@@ -197,7 +194,7 @@ class DbSchemaManager:
         ]
         with psycopg.connect(self._pg_conn, autocommit=True) as conn:
             with conn.cursor() as cur:
-                for sql in sql_statements:
+                for sql in statements:
                     cur.execute(sql)
 
     @staticmethod
@@ -216,13 +213,14 @@ class VectorStoreWriter:
     def __init__(self, config: EmbeddingConfig):
         self.config = config
 
-    def upsert_batch(self, store, docs: List[Document], batch_size: int = 64) -> None:
+    def upsert_batch(self, store, docs: List[Document], batch_size: int = 64) -> int:
+        if not docs:
+            return 0
         unique: dict[str, Document] = {}
         for doc in docs:
-            doc_id = compute_doc_id(doc)
-            if doc_id not in unique:
-                unique[doc_id] = doc
-        docs = list(unique.values())
+            doc_id = doc.metadata.get("doc_id") or compute_doc_id(doc)
+            unique.setdefault(doc_id, doc)
+        deduped = list(unique.values())
 
         char_budget = (
             self.config.max_chars_per_request
@@ -231,18 +229,22 @@ class VectorStoreWriter:
         )
         groups = list(
             iter_by_char_budget(
-                docs,
+                deduped,
                 char_budget,
                 batch_size,
                 self.config.max_items_per_request,
             )
         )
-        interval = (60.0 / self.config.rate_limit_rpm) if self.config.rate_limit_rpm > 0 else 0.0
+        if not groups:
+            return 0
 
+        interval = (60.0 / self.config.rate_limit_rpm) if self.config.rate_limit_rpm > 0 else 0.0
         total_groups = len(groups)
+        total_written = 0
+
         for index, batch in enumerate(groups, 1):
-            print(f"[upsert_batch] processing batch {index}/{total_groups} ({len(batch)} docs)")
-            ids = [compute_doc_id(doc) for doc in batch]
+            print(f"[upsert_batch] storing batch {index}/{total_groups} ({len(batch)} docs)")
+            ids = [doc.metadata.get("doc_id") or compute_doc_id(doc) for doc in batch]
             attempt = 0
             max_attempts = 6
             backoff = max(20.0, interval) or 20.0
@@ -252,13 +254,13 @@ class VectorStoreWriter:
                         store.add_documents(batch, ids=ids)
                     except TypeError:
                         store.add_documents(batch)
-                    print(f"[upsert_batch] batch {index}/{total_groups} inserted ✅")
+                    print(f"[upsert_batch] batch {index}/{total_groups} inserted {len(batch)} docs")
                     break
                 except Exception as exc:
                     message = str(exc).lower()
                     rate_limited = any(token in message for token in ("ratelimit", "rate limit", "rpm", "tpm"))
                     if not rate_limited or attempt >= max_attempts - 1:
-                        print(f"[upsert_batch] batch {index}/{total_groups} failed ❌: {exc}")
+                        print(f"[upsert_batch] batch {index}/{total_groups} failed: {exc}")
                         raise
                     attempt += 1
                     sleep_for = backoff * (1.5 ** attempt)
@@ -266,8 +268,10 @@ class VectorStoreWriter:
                         f"[rate-limit] retry {attempt}/{max_attempts} in {int(sleep_for)}s (batch {index}/{total_groups})"
                     )
                     time.sleep(sleep_for)
+            total_written += len(batch)
             if interval > 0 and index < total_groups:
                 time.sleep(interval)
+        return total_written
 
 
 class ParentChildRepository:
@@ -280,9 +284,9 @@ class ParentChildRepository:
     def _pg_conn(self) -> str:
         return (self.config.pg_conn or "").replace("postgresql+psycopg", "postgresql")
 
-    def upsert_parents(self, parents: Sequence[ParentDocument]) -> None:
+    def upsert_parents(self, parents: Sequence[ParentDocument]) -> int:
         if not parents or not self.config.pg_conn:
-            return
+            return 0
         sql = """
         INSERT INTO docstore_parent (id, content, metadata)
         VALUES (%s, %s, %s)
@@ -298,10 +302,11 @@ class ParentChildRepository:
         with psycopg.connect(self._pg_conn, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.executemany(sql, payload)
+        return len(parents)
 
-    def upsert_parents_custom(self, parents: Sequence[ParentDocument]) -> None:
+    def upsert_parents_custom(self, parents: Sequence[ParentDocument]) -> int:
         if not parents or not self.config.pg_conn:
-            return
+            return 0
         sql = """
         INSERT INTO parent_docs (parent_id, content, metadata)
         VALUES (%s, %s, %s)
@@ -317,10 +322,12 @@ class ParentChildRepository:
         with psycopg.connect(self._pg_conn, autocommit=True) as conn:
             with conn.cursor() as cur:
                 cur.executemany(sql, payload)
+        return len(parents)
 
-    def upsert_child_chunks_custom(self, embeddings_client, docs: List[Document]) -> None:
+    def upsert_child_chunks_custom(self, embeddings_client, docs: List[Document]) -> int:
         if not docs or not self.config.pg_conn:
-            return
+            return 0
+        wrote = 0
         batch_size = 64
         with psycopg.connect(self._pg_conn, autocommit=True) as conn:
             with conn.cursor() as cur:
@@ -347,7 +354,7 @@ class ParentChildRepository:
                                 lang,
                                 content,
                                 content_hash,
-                                self._format_vector_literal(vector),
+                                format_vector_literal(vector),
                             )
                         )
                     sql = """
@@ -356,21 +363,25 @@ class ParentChildRepository:
                     ON CONFLICT (parent_id, view, lang, content_hash) DO NOTHING
                     """
                     cur.executemany(sql, rows)
+                    wrote += len(batch_docs)
+        return wrote
 
     def dual_write_custom_schema(
         self,
         embeddings_client,
         parents: Sequence[ParentDocument],
         docs: List[Document],
-    ) -> None:
+    ) -> tuple[int, int]:
         if not self.config.pg_conn:
-            return
+            return (0, 0)
         if not parents and not docs:
-            return
+            return (0, 0)
+
+        parent_count = len(parents)
+        child_count = 0
         with psycopg.connect(self._pg_conn) as conn:
             with conn.cursor() as cur:
                 if parents:
-                    print(f"[dual_write] upserting {len(parents)} parents")
                     sql_parents = """
                         INSERT INTO parent_docs (parent_id, content, metadata)
                         VALUES (%s, %s, %s)
@@ -384,14 +395,14 @@ class ParentChildRepository:
                         for parent in parents
                     ]
                     cur.executemany(sql_parents, payload)
-                    print(f"[dual_write] parents inserted/updated ✅")
+                    print(f"[dual_write] parents upserted {len(payload)} rows")
                 if docs:
                     batch_size = 64
                     total_batches = (len(docs) + batch_size - 1) // batch_size
                     for index in range(0, len(docs), batch_size):
                         batch_docs = docs[index : index + batch_size]
                         print(
-                            f"[dual_write] embedding+inserting batch {index // batch_size + 1}/{total_batches} ({len(batch_docs)} docs)"
+                            f"[dual_write] embedding batch {index // batch_size + 1}/{total_batches} ({len(batch_docs)} docs)"
                         )
                         texts = [doc.page_content for doc in batch_docs]
                         vectors = embeddings_client.embed_documents(texts)
@@ -414,7 +425,7 @@ class ParentChildRepository:
                                     lang,
                                     content,
                                     content_hash,
-                                    self._format_vector_literal(vector),
+                                    format_vector_literal(vector),
                                 )
                             )
                         sql_children = """
@@ -423,10 +434,8 @@ class ParentChildRepository:
                             ON CONFLICT (parent_id, view, lang, content_hash) DO NOTHING
                         """
                         cur.executemany(sql_children, rows)
-
-    @staticmethod
-    def _format_vector_literal(vector: List[float]) -> str:
-        return "[" + ",".join(str(float(value)) for value in vector) + "]"
+                        child_count += len(batch_docs)
+        return (parent_count, child_count)
 
 
 __all__ = ["DbSchemaManager", "ParentChildRepository", "VectorStoreWriter"]

@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 
-import embedding as emb
+import app as emb
 import os
 
 

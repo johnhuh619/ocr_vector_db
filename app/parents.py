@@ -8,9 +8,14 @@ from .models import ParentDocument
 from .utils import Slugifier
 from .text_utils import TextPreprocessor
 
-HEADER_HINT = re.compile(r"^(?:#{1,3}\s+.+|Chapter\s+\d+\b|제\s*\d+\s*장\b|\d+\.\d+\s+.+)", re.M)
+HEADER_HINT = re.compile(
+    r"^(?:#{1,3}\s+.+|Chapter\s+\d+\b|제\s*\d+\s*장|\d+\.\d+\s+.+)",
+    re.M,
+)
 CAPTION_HINT = re.compile(r"(?im)^(?:figure|fig\.|table|그림)\s*\d+[:\.]?\s+.+")
-CAPTION_LINE_RE = re.compile(r"(?im)^(?P<prefix>(?:figure|fig\.|table|그림))\s*\d+[:\.]?\s+.+$")
+CAPTION_LINE_RE = re.compile(
+    r"(?im)^(?P<prefix>(?:figure|fig\.|table|그림))\s*\d+[:\.]?\s+.+$"
+)
 
 
 class ParentDocumentBuilder:
@@ -43,8 +48,8 @@ class ParentDocumentBuilder:
         if not docs:
             return
 
-        current_page = None
-        current_section = None
+        current_page: Optional[str] = None
+        current_section: Optional[str] = None
         page_counter = 0
         sorted_docs = sorted(
             docs,
@@ -126,9 +131,7 @@ class ParentDocumentBuilder:
                 metadata = dict(doc.metadata)
                 metadata["view"] = view
                 metadata["kind"] = "caption"
-                extra.append(
-                    Document(page_content=line.strip() + tail, metadata=metadata)
-                )
+                extra.append(Document(page_content=line.strip() + tail, metadata=metadata))
         return extra
 
     def _extract_first_match(self, texts: Sequence[str], pattern: re.Pattern) -> Optional[str]:

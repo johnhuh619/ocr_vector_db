@@ -1,9 +1,36 @@
 import os
+from dataclasses import dataclass
 from typing import Optional
 
 from dotenv import load_dotenv
 
-from .models import EmbeddingConfig
+
+PAGE_REGEX_DEFAULT = "(?mi)^\\s*(?:page|\\uD398\\uC774\\uC9C0)\\s*([0-9]{1,5})\\b"
+SECTION_REGEX_DEFAULT = "(?m)^(?:#{1,3}\\s+.+|Chapter\\s+\\d+\\b|\\uC81C\\s*\\d+\\s*\\uC7A5\\b|\\d+\\.\\d+\\s+.+)"
+
+
+@dataclass
+class EmbeddingConfig:
+    """Configuration for embedding pipeline."""
+
+    pg_conn: str
+    collection_name: str
+    embedding_model: str
+    embedding_dim: int
+    embedding_provider: str
+    gemini_model: str
+    custom_schema_write: bool
+    rate_limit_rpm: int
+    max_chars_per_request: int
+    max_items_per_request: int
+    max_docs_to_embed: int
+    parent_mode: str
+    page_regex: str
+    section_regex: str
+    enable_auto_ocr: bool
+    ivfflat_probes: Optional[int] = None
+    hnsw_ef_search: Optional[int] = None
+    hnsw_ef_construction: Optional[int] = None
 
 
 def _parse_int(value: Optional[str], default: int = 0) -> int:
@@ -31,6 +58,7 @@ def _parse_bool(value: Optional[str], default: bool = False) -> bool:
 
 
 def load_config() -> EmbeddingConfig:
+    """Load configuration from environment variables."""
     load_dotenv()
 
     embedding_provider = os.getenv("EMBEDDING_PROVIDER", "voyage").lower()
@@ -51,11 +79,8 @@ def load_config() -> EmbeddingConfig:
         max_items_per_request=_parse_int(os.getenv("MAX_ITEMS_PER_REQUEST"), 0),
         max_docs_to_embed=_parse_int(os.getenv("MAX_DOCS_TO_EMBED"), 0),
         parent_mode=os.getenv("PARENT_MODE", "unit").lower(),
-        page_regex=os.getenv("PAGE_REGEX", r"(?mi)^\s*(?:page|페이지)\s*([0-9]{1,5})\b"),
-        section_regex=os.getenv(
-            "SECTION_REGEX",
-            r"(?m)^(?:#{1,3}\s+.+|Chapter\s+\d+\b|제\s*\d+\s*장\b|\d+\.\d+\s+.+)",
-        ),
+        page_regex=os.getenv("PAGE_REGEX", PAGE_REGEX_DEFAULT),
+        section_regex=os.getenv("SECTION_REGEX", SECTION_REGEX_DEFAULT),
         enable_auto_ocr=_parse_bool(os.getenv("ENABLE_AUTO_OCR", "false"), False),
         ivfflat_probes=_parse_optional_int(os.getenv("IVFFLAT_PROBES")),
         hnsw_ef_search=_parse_optional_int(os.getenv("HNSW_EF_SEARCH")),
@@ -64,4 +89,4 @@ def load_config() -> EmbeddingConfig:
     return config
 
 
-__all__ = ["load_config"]
+__all__ = ["EmbeddingConfig", "load_config"]
