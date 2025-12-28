@@ -1,0 +1,10 @@
+Testing Korean and English patterns:
+================================================================================
+[PASS] Korean copyright
+Traceback (most recent call last):
+  File "C:\ocr_vector_db\test_korean_validator.py", line 80, in <module>
+    success = test_validator()
+              ^^^^^^^^^^^^^^^^
+  File "C:\ocr_vector_db\test_korean_validator.py", line 68, in test_validator
+    print(f'      Content: "{content}"')
+UnicodeEncodeError: 'cp949' codec can't encode character '\xa9' in position 20: illegal multibyte sequence
