@@ -9,13 +9,12 @@ Rules:
 """
 
 import json
-from typing import List, Optional
-
-import psycopg  # type: ignore
+from typing import Any, List, Optional, Tuple
 
 from domain import Concept
 from shared.config import EmbeddingConfig
 
+from ..db import DatabaseHelper
 from .base import BaseRepository
 
 
@@ -27,180 +26,87 @@ class ConceptRepository(BaseRepository[Concept]):
     """
 
     def __init__(self, config: EmbeddingConfig):
-        self.config = config
-
-    @property
-    def _pg_conn(self) -> str:
-        """Get PostgreSQL connection string."""
-        return (self.config.pg_conn or "").replace("postgresql+psycopg", "postgresql")
+        self.db = DatabaseHelper(config)
 
     def save(self, concept: Concept) -> Concept:
-        """Save a Concept entity.
-
-        Args:
-            concept: Concept to save
-
-        Returns:
-            Saved concept
-        """
-        if not self.config.pg_conn:
-            return concept
-
-        sql = """
-        INSERT INTO concepts (id, document_id, content, metadata, created_at)
-        VALUES (%s, %s, %s, %s, now())
-        ON CONFLICT (id) DO UPDATE SET
-          document_id = EXCLUDED.document_id,
-          content = EXCLUDED.content,
-          metadata = concepts.metadata || EXCLUDED.metadata,
-          updated_at = now();
-        """
-        with psycopg.connect(self._pg_conn, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    sql,
-                    (
-                        concept.id,
-                        concept.document_id,
-                        concept.content,
-                        json.dumps(concept.metadata or {}),
-                    ),
-                )
+        """Save a Concept entity."""
+        self.db.execute(
+            """
+            INSERT INTO concepts (id, document_id, "order", content, metadata, created_at)
+            VALUES (%s, %s, %s, %s, %s, now())
+            ON CONFLICT (id) DO UPDATE SET
+              document_id = EXCLUDED.document_id,
+              "order" = EXCLUDED."order",
+              content = EXCLUDED.content,
+              metadata = concepts.metadata || EXCLUDED.metadata,
+              updated_at = now()
+            """,
+            (
+                concept.id,
+                concept.document_id,
+                concept.order,
+                concept.content,
+                json.dumps(concept.metadata or {}),
+            ),
+        )
         return concept
 
     def find_by_id(self, entity_id: str) -> Optional[Concept]:
-        """Find a Concept by ID.
-
-        Args:
-            entity_id: Concept ID
-
-        Returns:
-            Concept if found, None otherwise
-        """
-        if not self.config.pg_conn:
-            return None
-
-        sql = "SELECT id, document_id, content, metadata FROM concepts WHERE id = %s"
-        with psycopg.connect(self._pg_conn) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (entity_id,))
-                row = cur.fetchone()
-                if row:
-                    return Concept(
-                        id=row[0],
-                        document_id=row[1],
-                        content=row[2],
-                        metadata=row[3] or {},
-                    )
-        return None
+        """Find a Concept by ID."""
+        row = self.db.fetch_one(
+            'SELECT id, document_id, "order", content, metadata FROM concepts WHERE id = %s',
+            (entity_id,),
+        )
+        return self._to_entity(row) if row else None
 
     def find_by_document_id(self, document_id: str) -> List[Concept]:
-        """Find all Concepts belonging to a Document.
-
-        This is used by CascadeDeleter for CASCADE-001.
-
-        Args:
-            document_id: Document ID
-
-        Returns:
-            List of Concepts for this Document
-        """
-        if not self.config.pg_conn:
-            return []
-
-        sql = "SELECT id, document_id, content, metadata FROM concepts WHERE document_id = %s"
-        with psycopg.connect(self._pg_conn) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (document_id,))
-                rows = cur.fetchall()
-                return [
-                    Concept(
-                        id=row[0],
-                        document_id=row[1],
-                        content=row[2],
-                        metadata=row[3] or {},
-                    )
-                    for row in rows
-                ]
+        """Find all Concepts belonging to a Document (for CASCADE-001)."""
+        rows = self.db.fetch_all(
+            'SELECT id, document_id, "order", content, metadata FROM concepts WHERE document_id = %s ORDER BY "order"',
+            (document_id,),
+        )
+        return [self._to_entity(row) for row in rows]
 
     def find_all(self) -> List[Concept]:
-        """Find all Concepts.
-
-        Returns:
-            List of all concepts
-        """
-        if not self.config.pg_conn:
-            return []
-
-        sql = "SELECT id, document_id, content, metadata FROM concepts"
-        with psycopg.connect(self._pg_conn) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql)
-                rows = cur.fetchall()
-                return [
-                    Concept(
-                        id=row[0],
-                        document_id=row[1],
-                        content=row[2],
-                        metadata=row[3] or {},
-                    )
-                    for row in rows
-                ]
+        """Find all Concepts."""
+        rows = self.db.fetch_all(
+            'SELECT id, document_id, "order", content, metadata FROM concepts ORDER BY document_id, "order"'
+        )
+        return [self._to_entity(row) for row in rows]
 
     def delete(self, entity_id: str) -> None:
-        """Delete a Concept by ID.
-
-        Note: This does NOT cascade to child Fragments.
-        Use CascadeDeleter for cascade deletion.
-
-        Args:
-            entity_id: Concept ID to delete
-        """
-        if not self.config.pg_conn:
-            return
-
-        sql = "DELETE FROM concepts WHERE id = %s"
-        with psycopg.connect(self._pg_conn, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (entity_id,))
+        """Delete a Concept by ID (does NOT cascade to Fragments)."""
+        self.db.execute("DELETE FROM concepts WHERE id = %s", (entity_id,))
 
     def exists(self, entity_id: str) -> bool:
-        """Check if a Concept exists.
-
-        Args:
-            entity_id: Concept ID
-
-        Returns:
-            True if exists, False otherwise
-        """
-        if not self.config.pg_conn:
-            return False
-
-        sql = "SELECT 1 FROM concepts WHERE id = %s"
-        with psycopg.connect(self._pg_conn) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql, (entity_id,))
-                return cur.fetchone() is not None
+        """Check if a Concept exists."""
+        return self.db.exists("SELECT 1 FROM concepts WHERE id = %s", (entity_id,))
 
     def ensure_table(self) -> None:
         """Create concepts table if it doesn't exist."""
-        if not self.config.pg_conn:
-            return
+        self.db.execute("""
+            CREATE TABLE IF NOT EXISTS concepts (
+              id          TEXT PRIMARY KEY,
+              document_id TEXT NOT NULL,
+              "order"     INTEGER NOT NULL DEFAULT 0,
+              content     TEXT,
+              metadata    JSONB DEFAULT '{}'::jsonb,
+              created_at  TIMESTAMPTZ DEFAULT now(),
+              updated_at  TIMESTAMPTZ DEFAULT now()
+            );
+            CREATE INDEX IF NOT EXISTS idx_concepts_document_id ON concepts (document_id)
+        """)
 
-        sql = """
-        CREATE TABLE IF NOT EXISTS concepts (
-          id          TEXT PRIMARY KEY,
-          document_id TEXT NOT NULL,
-          content     TEXT NOT NULL,
-          metadata    JSONB DEFAULT '{}'::jsonb,
-          created_at  TIMESTAMPTZ DEFAULT now(),
-          updated_at  TIMESTAMPTZ DEFAULT now()
-        );
-        CREATE INDEX IF NOT EXISTS idx_concepts_document_id ON concepts (document_id);
-        """
-        with psycopg.connect(self._pg_conn, autocommit=True) as conn:
-            with conn.cursor() as cur:
-                cur.execute(sql)
+    @staticmethod
+    def _to_entity(row: Tuple[Any, ...]) -> Concept:
+        """Map database row to Concept entity."""
+        return Concept(
+            id=row[0],
+            document_id=row[1],
+            order=row[2] or 0,
+            content=row[3],
+            metadata=row[4] or {},
+        )
 
 
 __all__ = ["ConceptRepository"]

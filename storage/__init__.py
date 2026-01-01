@@ -12,6 +12,7 @@ Rules:
 
 from .adapters import LangChainAdapter
 from .cascade import CascadeDeleter
+from .db import DatabaseHelper
 from .repositories import (
     BaseRepository,
     ConceptRepository,
@@ -22,6 +23,8 @@ from .repositories import (
 from .schema import DbSchemaManager
 
 __all__ = [
+    # Database
+    "DatabaseHelper",
     # Schema
     "DbSchemaManager",
     # Cascade

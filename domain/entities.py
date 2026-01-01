@@ -49,7 +49,8 @@ class Concept:
 
     id: str
     document_id: str
-    order: int
+    order: int = 0
+    content: Optional[str] = None  # Parent document content for context
     metadata: dict = field(default_factory=dict)
 
     def validate(self) -> None:
