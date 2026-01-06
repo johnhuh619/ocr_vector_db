@@ -18,6 +18,8 @@ from shared.config import EmbeddingConfig
 class DbSchemaManager:
     """Responsible for ensuring Postgres schema prerequisites exist."""
 
+    _tuning_attempted: set[str] = set()
+
     def __init__(self, config: EmbeddingConfig):
         self.config = config
 
@@ -29,6 +31,10 @@ class DbSchemaManager:
         """Apply database-level performance tuning parameters."""
         if not self.config.pg_conn:
             return
+        conn_str = self._pg_conn
+        if conn_str in self._tuning_attempted:
+            return
+        self._tuning_attempted.add(conn_str)
         params = {
             "ivfflat.probes": self.config.ivfflat_probes,
             "hnsw.ef_search": self.config.hnsw_ef_search,
@@ -55,58 +61,68 @@ class DbSchemaManager:
                 cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
 
     def ensure_indexes(self) -> None:
-        """Create HNSW vector indexes and JSONB GIN indexes for metadata filtering."""
-        if not self.config.pg_conn or not self.config.collection_name:
+        """Create global indexes (not collection-specific) for vector search and metadata filtering.
+
+        Creates:
+        - HNSW vector index for cosine similarity search
+        - BTREE index on collection_id for efficient collection filtering
+        - GIN index for JSONB metadata
+        - BTREE indexes for common metadata filters
+        """
+        if not self.config.pg_conn:
             return
+
         table = "langchain_pg_embedding"
-        safe_collection = self._sanitize_identifier(self.config.collection_name)
+
+        # Global indexes - created once, not per collection
+        indexes = [
+            # HNSW vector index for cosine similarity (single global index)
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_hnsw_cosine
+            ON {table} USING hnsw (embedding vector_cosine_ops);
+            """,
+            # BTREE index on collection_id for fast collection filtering
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_collection_id
+            ON {table} (collection_id);
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_collection_name
+            ON langchain_pg_collection (name);
+            """,
+            # GIN index for JSONB metadata (single global index)
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_meta_gin
+            ON {table} USING GIN (cmetadata);
+            """,
+            # BTREE indexes for common metadata filters
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_unit_id
+            ON {table} ((cmetadata->>'unit_id'));
+            """,
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_unit_role
+            ON {table} ((cmetadata->>'unit_role'));
+            """,
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_lang
+            ON {table} ((cmetadata->>'lang'));
+            """,
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_parent_id
+            ON {table} ((cmetadata->>'parent_id'));
+            """,
+            f"""
+            CREATE INDEX IF NOT EXISTS idx_embedding_view
+            ON {table} ((cmetadata->>'view'));
+            """,
+        ]
+
         with psycopg.connect(self._pg_conn, autocommit=True) as conn:
             with conn.cursor() as cur:
-                # HNSW vector index for cosine similarity
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_hnsw_cosine
-                    ON {table} USING hnsw (embedding vector_cosine_ops);
-                    """
-                )
-                # GIN index for JSONB metadata
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_meta_gin
-                    ON {table} USING GIN (cmetadata);
-                    """
-                )
-                # BTREE indexes for common filters
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_unit_id_btree
-                    ON {table} ((cmetadata->>'unit_id'));
-                    """
-                )
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_unit_role_btree
-                    ON {table} ((cmetadata->>'unit_role'));
-                    """
-                )
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_lang_btree
-                    ON {table} ((cmetadata->>'lang'));
-                    """
-                )
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_parent_id_btree
-                    ON {table} ((cmetadata->>'parent_id'));
-                    """
-                )
-                cur.execute(
-                    f"""
-                    CREATE INDEX IF NOT EXISTS idx_{safe_collection}_view_btree
-                    ON {table} ((cmetadata->>'view'));
-                    """
-                )
+                for idx_sql in indexes:
+                    cur.execute(idx_sql)
+        print(f"[index] Global indexes ensured on {table}")
 
     def ensure_parent_docstore(self) -> None:
         """Create docstore_parent table for parent documents."""
@@ -178,9 +194,8 @@ class DbSchemaManager:
               ON child_chunks (parent_id, view, lang, content_hash);
             """,
             """
-            CREATE INDEX IF NOT EXISTS child_chunks_vec_idx
-              ON child_chunks USING ivfflat (embedding vector_cosine_ops)
-              WITH (lists = 100);
+            CREATE INDEX IF NOT EXISTS child_chunks_vec_hnsw_idx
+              ON child_chunks USING hnsw (embedding vector_cosine_ops);
             """,
             """
             CREATE TABLE IF NOT EXISTS parent_docs (

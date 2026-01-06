@@ -13,6 +13,8 @@ Rules:
 from .adapters import LangChainAdapter
 from .cascade import CascadeDeleter
 from .db import DatabaseHelper
+from .parent_store import ParentDocumentStore
+from .metrics import EmbeddingMetricsService
 from .repositories import (
     BaseRepository,
     ConceptRepository,
@@ -21,6 +23,7 @@ from .repositories import (
     FragmentRepository,
 )
 from .schema import DbSchemaManager
+from .vector_store import VectorStoreWriter
 
 __all__ = [
     # Database
@@ -37,4 +40,8 @@ __all__ = [
     "EmbeddingRepository",
     # Adapters
     "LangChainAdapter",
+    # Vector Store
+    "VectorStoreWriter",
+    "ParentDocumentStore",
+    "EmbeddingMetricsService",
 ]
