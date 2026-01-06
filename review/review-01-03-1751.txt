@@ -1,0 +1,23 @@
+- [높음] Concept ID가 매번 UUID로 생성되어 동일 문서를 재수집하면 doc_id가 달    라지고 중복 임베딩이 누적돼 검색 결과가 중복/스큐될 위험이 큽니다.         
+    ingestion/segmentation.py:65 ingestion/concept_builder.py:121 domain/      
+    entities.py:113                                                            
+  - [높음] 검색 쿼리가 collection_name/collection_id로 범위를 제한하지 않아 DB 
+    내 다른 컬렉션 임베딩까지 섞여 반환될 수 있습니다. retrieval/search.py:95  
+    storage/vector_store.py:40                                                 
+  - [중간] 유닛화가 Python/JS 중심이라 나머지 텍스트가 “orphans” Concept로 몰리    고, 부모 컨텍스트가 2000자에서 잘려 의미 경계가 흐려질 수 있습니다(정확도  
+    저하). ingestion/segmentation.py:64 ingestion/concept_builder.py:121 api/  
+    use_cases/ingest.py:272                                                    
+  - [중간] 요청 길이/건수 제한 설정값이 실제 배치/청킹에 적용되지 않아 긴 문단 
+    이 모델 제한을 넘거나 의미가 희석될 위험이 있습니다. shared/config.py:24   
+    storage/vector_store.py:79                                                 
+  - [중간] 기본 PDF 파서가 PyMuPDF 경로이며 ENABLE_AUTO_OCR/FORCE_OCR이 적용되 
+    지 않아 스캔 PDF에서 OCR이 누락될 수 있습니다(키 없으면 이미지 OCR도 스킵).    api/use_cases/ingest.py:193 ingestion/parsers/pymupdf_parser.py:238        
+                                                                               
+  질문/가정                                                                    
+                                                                               
+  - 한 DB에서 여러 컬렉션을 운용할 계획인가요? 그렇다면 검색/컨텍스트 조회에 컬    렉션 스코핑이 필요합니다.                                                  
+  - 재수집 시 idempotent 업데이트가 목표인가요? 그렇다면 Concept ID/doc_id를 안    정적으로 만드는 방향이 필요합니다.                                         
+                                                                               
+  짧은 총평: 레이어 분리는 깔끔하지만, 현재 구조 그대로면 임베딩 중복과 컬렉션 
+  혼입, 길이 제어 부재로 인해 “효과적 임베딩/높은 정확도”를 보장하기는 어렵습니
+  다.                 

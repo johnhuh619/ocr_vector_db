@@ -1,0 +1,7 @@
+{"query": "GET /assistants/{assistant_id} DELETE /assistants/{assistant_id} pa' 己 /assistan", "view": "code", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "convert_temperature 온도 단위 변환 함수 Parameters: value: 변환할 온도 값 source_unit: 원본", "view": "code", "top_k": 10, "expect_parent_ids": ["b5a283c5-d48e-41fb-802f-833be5bf1589"], "language": "python"}
+{"query": "def contains_all_tool_calls_in_order_exact_inatch(root_mn: Run, example: Example", "view": "code", "top_k": 10, "expect_parent_ids": ["64058d33-199a-4701-9be2-e1c9220fe98d"], "language": "python"}
+{"query": "convert_weight 무계 단위 변환 함수 Parameters: value: 변환할 무게 값 source_unit: 원본", "view": "code", "top_k": 10, "expect_parent_ids": ["4af3e905-a256-4b28-96d8-f9247129d340"], "language": "python"}
+{"query": "GET /assistants/{assistant_id}/graph GET /assistants/{assistant_id}/subgraphs GE", "view": "code", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "The powerhouse of the cell is the mitochondria [{\"source\":\"https://example.com\"}", "view": "code", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "convert_le.ngth 길야 단위 변환 함수 Parameters: value: 변환할 길이 값 source_unit: 원본", "view": "code", "top_k": 10, "expect_parent_ids": ["7f6bf79b-9939-4e0d-a338-863464a85a57"], "language": "python"}

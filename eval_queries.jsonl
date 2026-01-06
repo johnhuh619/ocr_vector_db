@@ -1,0 +1,8 @@
+{"query": "2 랭체인은 80개 이상의 채팅 모델 패키지를 제공한다（2025년 4월）, 지원하는 채팅 모델", "view": "text", "top_k": 10, "expect_parent_ids": ["8a08f78b-a443-4e41-8af2-1b91c569946a"]}
+{"query": "def contains_all_tool_calls_in_order_exact_inatch(root_mn: Run, example: Example", "view": "code", "top_k": 10, "expect_parent_ids": ["64058d33-199a-4701-9be2-e1c9220fe98d"], "language": "python"}
+{"query": "Define the properties of your input data for validation, transformation and synt", "view": "text", "top_k": 10, "expect_parent_ids": ["f7347ae0-a6aa-4ecb-b776-1fb1ac60a47e"]}
+{"query": "Learning LangChain ISBN 9781098167288 © 2025 Olumayowa \"Mayo\" Olufemi Oshin This", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "11.1 챗봇.........................................................................", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "1.6 요약 ....................................................................-....", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "HumanMessage(content= 'Context: 거대 언어 모델(LLM)은 자연어 처리(NLP) 분야의 최신 발전을 이끌고 있습니다.", "view": "text", "top_k": 10, "expect_parent_ids": ["2156b268-5c35-44d7-a096-868035d70e35"]}
+{"query": "evaluators = [contains_all_tool_calls_any_order, contains_all_tool_calls_in_orde", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}

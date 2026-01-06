@@ -1,0 +1,30 @@
+{"query": "2 Tai Ridnik et al., \"Code Generation with AlphaCodium： From Prompt Engineering", "view": "text", "top_k": 10, "expect_parent_ids": ["50c9e94e-bcc2-496b-89af-d9a7d7cffa1a"]}
+{"query": "In LCEL. you can configure the temperature of b large language model", "view": "text", "top_k": 10, "expect_parent_ids": ["8fac2e92-287e-4a6c-ae5f-350c1911cd18"]}
+{"query": "11.1 챗봇.........................................................................", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "evaluators = [contains_all_tool_calls_any_order, contains_all_tool_calls_in_orde", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "CEH3 LLM 등장 이전에는 해당 문제를 해결하기 위해 머신러닝 기법을 이용해 분류기", "view": "text", "top_k": 10, "expect_parent_ids": ["358feda0-abba-4a3c-a169-ec68780db30d"]}
+{"query": "주 Create a prompt from scratch W Use our template editor to", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "graph.get_graph().drawjnermaid_j)ng(output_file _path='LLM_call_architecture.png", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "IM네 프롬프트에 포함된 코드에서 서브에이전트의 이름은 의미 있고 구별되는 이름으로 지어야 한다.", "view": "text", "top_k": 10, "expect_parent_ids": ["489db48a-58e3-451d-b50d-6a5bf32037fe"]}
+{"query": "Create a new project Your project will have its own dedicated instance", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "5 R. Liu et al. (2024). Mind Your Step (by Step)： Chain-of-Thought", "view": "text", "top_k": 10, "expect_parent_ids": ["1417e019-058b-4e5a-9437-4e1d84762d33"]}
+{"query": "GES3 서브그래프 노드에 공유 키 외의 다른 키를 전달할 경우 해당 키는", "view": "text", "top_k": 10, "expect_parent_ids": ["232d0d3d-095d-43f0-90e8-03fff4f4613b"]}
+{"query": "2 랭체인은 80개 이상의 채팅 모델 패키지를 제공한다（2025년 4월）, 지원하는 채팅 모델", "view": "text", "top_k": 10, "expect_parent_ids": ["8a08f78b-a443-4e41-8af2-1b91c569946a"]}
+{"query": "To achieve this, you can use the *Runnab(ePassth<ough.ass<~ ■ ANSWER.ACCURACY <U", "view": "text", "top_k": 10, "expect_parent_ids": ["8fac2e92-287e-4a6c-ae5f-350c1911cd18"]}
+{"query": "1 Brown et al. (2020). Lang니age Mod이s are Few-Shot Learners. arXiv.org. https", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "5.1 아키텍처 #1丄LM 호출 ..............................................................", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "오라일리 표지의 동물들은 대부분 멸종위기종이다. 이들은 모두 우리에게 소중한 존재다. 표지 일러스트는「마이어스", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "0m 일반적인 에이전트 아키텍처와 매우 유사하다. 다만 에이전트의 반복을 시작하기 전에 먼저", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "1 Patrick Lewis et al., \"Retrieval-Augmented Generation for KnowledgeHintensive ", "view": "text", "top_k": 10, "expect_parent_ids": ["3406ce21-65bf-4cb2-8bf0-32bafb9b3142"]}
+{"query": "1.1 랭체인사용환경구축…•.................. ............................................ •", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "3 옮긴이_ 이번 실습에서는 OPENAI_API_KEY, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY를 입력한다. 랭", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "GET /assistants/{assistant_id} DELETE /assistants/{assistant_id} pa' 己 /assistan", "view": "code", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "convert_temperature 온도 단위 변환 함수 Parameters: value: 변환할 온도 값 source_unit: 원본", "view": "code", "top_k": 10, "expect_parent_ids": ["b5a283c5-d48e-41fb-802f-833be5bf1589"], "language": "python"}
+{"query": "def contains_all_tool_calls_in_order_exact_inatch(root_mn: Run, example: Example", "view": "code", "top_k": 10, "expect_parent_ids": ["64058d33-199a-4701-9be2-e1c9220fe98d"], "language": "python"}
+{"query": "convert_weight 무계 단위 변환 함수 Parameters: value: 변환할 무게 값 source_unit: 원본", "view": "code", "top_k": 10, "expect_parent_ids": ["4af3e905-a256-4b28-96d8-f9247129d340"], "language": "python"}
+{"query": "GET /assistants/{assistant_id}/graph GET /assistants/{assistant_id}/subgraphs GE", "view": "code", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "The powerhouse of the cell is the mitochondria [{\"source\":\"https://example.com\"}", "view": "code", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "convert_le.ngth 길야 단위 변환 함수 Parameters: value: 변환할 길이 값 source_unit: 원본", "view": "code", "top_k": 10, "expect_parent_ids": ["7f6bf79b-9939-4e0d-a338-863464a85a57"], "language": "python"}
+{"query": "Trace Count A summary chan showing successful, pending and erroring traces w*", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "Here is a suggested Tweet to summaries the phi-3 tedmfc서 • RaNKED.PneFERENCC", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}
+{"query": "활용하거나, ,openai' 및 'cohere' 라이브러리를 통해 OpenAI와 Cohere의 서비스를 이용하여 거대 언어", "view": "text", "top_k": 10, "expect_parent_ids": ["001.pdf-orphans-16af9ba2-fedd-4ffa-bca7-8641fa425c58"]}

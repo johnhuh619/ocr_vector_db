@@ -1,0 +1,37 @@
+ Findings
+                                                           
+  - 높음: unit_id/concept_id가 문서 스코프 없이 콘텐츠 해시로만 생성돼 서로 다른 문서의 동일 코드/텍스트가 같은
+    Concept로 병합되고, ON CONFLICT 업데이트로 document_id 가 덮어써질 수 있습니다(컨텍스트 혼입/정확도 저하).    
+    ingestion/segmentation.py:148
+    ingestion/segmentation.py:170
+    ingestion/concept_builder.py:91
+    storage/repositories/concept_repo.py:31                
+  - 높음: 재수집 시 기존 Concept/Fragment/Embedding 정리 로직이 호출되지 않아 변경된 파일의 과거 임베딩이 그대로 남습니다(중복·스테일 결과 누적). api/use_cases/        
+    ingest.py:134 
+    api/use_cases/ingest.py:152 storage/cascade.py:83                                          
+  - 중간: 텍스트 분절은 여전히 문단 단위이고, text_unit_threshold는 Concept 묶음만 강화할 뿐 Fragment 길이를 늘리지 않아 “짧은 Fragment” 문제 해결에 직접 기여하지 않습니다.
+    ingestion/parsers/ocr.py:24 
+    shared/text_utils.py:38
+    ingestion/concept_builder.py:100      
+  - 중간: force_ocr=True인데 OCR provider가 없으면 _ocr_all_pages가 빈 결과를 반환하고 텍스트 추출로      
+    fallback하지 않아 완전 누락이 발생합니다. 
+    ingestion/parsers/pymupdf_parser.py:163
+    ingestion/parsers/pymupdf_parser.py:384
+  - 중간: 페이지 렌더링에서 get_pixmap(matrix=...)에 float를 전달해 PyMuPDF API 기대값과 다를 수 있고, OCR 품질/속도가 불안정해질 수 있습니다(주석도 300DPI vs 실제 ~150DPI 불일치).
+  ingestion/parsers/pymupdf_parser.py:395
+  
+  Questions / Assumptions
+
+  - Concept/Unit ID가 “문서 범위까지 고정”돼야 하는지(도메인 규칙상 Document 단위 소유를 유지하려면 스코프 포함이 필요) 확인 부탁드립니다.
+  - 재수집 정책이 “완전 대체(기존 삭제 후 재적재)”인지, “증분/버전 누적”인지 명확히 해주실 수 있나요?
+
+  Change Summary
+
+  - 인제스트 파이프라인과 OCR 경로를 강화했고, 검색 컬렉션 스코핑 및 컨텍스트 길이 제어 설정이 추가됐습니다. api/ 
+    use_cases/ingest.py
+    ingestion/parsers/pymupdf_parser.py
+    retrieval/search.py
+    shared/config.py
+  - Concept/Fragment ID 결정성을 강화했지만 문서 스코핑 부재로 인한 충돌 위험이 생겼습니다. 
+    ingestion/segmentation.py
+    ingestion/concept_builder.py
