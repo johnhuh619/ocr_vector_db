@@ -9,19 +9,21 @@ Rules:
 - DEP-RET-ALLOW-001~004: MAY import domain, storage, embedding (clients), shared
 """
 
-from .context import ContextExpander
+from .context import ContextExpander, ExpandedResult
 from .grouping import ResultGrouper
 from .pipeline import RetrievalPipeline
 from .query import QueryInterpreter
-from .search import VectorSearchEngine
+from .search import SearchResult, VectorSearchEngine
 
 __all__ = [
     # Query
     "QueryInterpreter",
     # Search
     "VectorSearchEngine",
+    "SearchResult",
     # Context
     "ContextExpander",
+    "ExpandedResult",
     # Grouping
     "ResultGrouper",
     # Pipeline

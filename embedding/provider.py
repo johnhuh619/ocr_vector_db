@@ -34,7 +34,32 @@ class GeminiEmbeddings:
         return self._extract_vec(response)
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
-        """Embed a list of documents."""
+        """Embed a list of documents using batch API when possible."""
+        if not texts:
+            return []
+        
+        # Try batch processing first
+        try:
+            response = self._genai.embed_content(
+                model=self._model,
+                content=texts,  # Pass as list for batch processing
+                task_type="retrieval_document"
+            )
+            # Handle batch response format
+            if isinstance(response, dict):
+                if "embeddings" in response:
+                    # Batch response format
+                    return [[float(x) for x in emb] for emb in response["embeddings"]]
+                elif "embedding" in response:
+                    # Single item was passed, wrap result
+                    return [self._extract_vec(response)]
+            # Fallback: response might have embeddings attribute
+            if hasattr(response, "embeddings"):
+                return [[float(x) for x in emb] for emb in response.embeddings]
+        except Exception:
+            pass  # Fall through to sequential processing
+        
+        # Fallback to sequential processing
         return [self._embed_one(text, task="retrieval_document") for text in texts]
 
     def embed_query(self, text: str) -> List[float]:
@@ -54,12 +79,23 @@ class EmbeddingProviderFactory:
             config: EmbeddingConfig with provider settings
 
         Returns:
-            Embedding client (VoyageAIEmbeddings or GeminiEmbeddings)
+            Embedding client (OpenAI, VoyageAI, or GeminiEmbeddings)
         """
         if config.embedding_provider == "gemini":
             return GeminiEmbeddings(model=config.gemini_model)
+        
+        if config.embedding_provider == "openai":
+            from langchain_openai import OpenAIEmbeddings  # type: ignore
+            # Pass dimensions for text-embedding-3 models that support dimension reduction
+            return OpenAIEmbeddings(
+                model=config.embedding_model,
+                dimensions=config.embedding_dim,
+            )
+        
+        # Default: VoyageAI (also supports OpenAI models via langchain_voyageai)
         from langchain_voyageai import VoyageAIEmbeddings  # type: ignore
-
+        # VoyageAI doesn't support dimensions param, but if using OpenAI models via voyage provider,
+        # we need to handle it differently
         return VoyageAIEmbeddings(model=config.embedding_model)
 
 

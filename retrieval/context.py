@@ -12,9 +12,8 @@ Rules:
 from dataclasses import dataclass
 from typing import Dict, List, Optional
 
-import psycopg  # type: ignore
-
 from shared.config import EmbeddingConfig
+from shared.db_pool import get_pool
 
 from .search import SearchResult
 
@@ -48,11 +47,7 @@ class ContextExpander:
 
     def __init__(self, config: EmbeddingConfig):
         self.config = config
-
-    @property
-    def _pg_conn(self) -> str:
-        """Get PostgreSQL connection string."""
-        return (self.config.pg_conn or "").replace("postgresql+psycopg", "postgresql")
+        self._pool = get_pool(config)
 
     def expand(self, results: List[SearchResult]) -> List[ExpandedResult]:
         """Expand search results with parent context.
@@ -110,7 +105,7 @@ class ContextExpander:
         WHERE id = ANY(%s)
         """
 
-        with psycopg.connect(self._pg_conn) as conn:
+        with self._pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, (parent_ids,))
                 rows = cur.fetchall()

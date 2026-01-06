@@ -14,6 +14,9 @@ from typing import List, Optional, Protocol
 from domain import View
 from shared.config import EmbeddingConfig
 
+# Maximum allowed top_k to prevent excessive resource usage
+MAX_TOP_K = 100
+
 
 class EmbeddingClientProtocol(Protocol):
     """Protocol for embedding client (dependency inversion)."""
@@ -32,7 +35,7 @@ class QueryPlan:
         query_embedding: Vector embedding of query
         view_filter: Optional view filter (text, code, image, etc.)
         language_filter: Optional language filter (python, javascript, etc.)
-        top_k: Number of results to retrieve
+        top_k: Number of results to retrieve (capped at MAX_TOP_K)
     """
 
     query_text: str
@@ -40,6 +43,13 @@ class QueryPlan:
     view_filter: Optional[View] = None
     language_filter: Optional[str] = None
     top_k: int = 10
+
+    def __post_init__(self):
+        """Validate and cap top_k to prevent excessive resource usage."""
+        if self.top_k > MAX_TOP_K:
+            self.top_k = MAX_TOP_K
+        elif self.top_k < 1:
+            self.top_k = 1
 
 
 class QueryInterpreter:

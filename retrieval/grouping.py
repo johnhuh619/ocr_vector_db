@@ -87,8 +87,9 @@ class ResultGrouper:
         seen = set()
         unique = []
         for result in results:
-            if result.content not in seen:
-                seen.add(result.content)
+            key = result.content or result.metadata.get("doc_id") or result.fragment_id
+            if key not in seen:
+                seen.add(key)
                 unique.append(result)
         return unique
 

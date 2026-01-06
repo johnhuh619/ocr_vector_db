@@ -12,11 +12,9 @@ Rules:
 from dataclasses import dataclass
 from typing import List, Optional
 
-import psycopg  # type: ignore
-
 from domain import View
 from shared.config import EmbeddingConfig
-from shared.hashing import HashingService
+from shared.db_pool import get_pool
 
 from .query import QueryPlan
 
@@ -57,19 +55,22 @@ class VectorSearchEngine:
 
     def __init__(self, config: EmbeddingConfig):
         self.config = config
+        # DB tuning is now applied once via shared.db_pool when pool is first created
+        self._pool = get_pool(config)
 
-    @property
-    def _pg_conn(self) -> str:
-        """Get PostgreSQL connection string."""
-        return (self.config.pg_conn or "").replace("postgresql+psycopg", "postgresql")
-
-    def search(self, query_plan: QueryPlan) -> List[SearchResult]:
+    def search(
+        self,
+        query_plan: QueryPlan,
+        collection_name: Optional[str] = None,
+    ) -> List[SearchResult]:
         """Execute vector similarity search.
 
-        Searches Fragment embeddings in langchain_pg_embedding table.
+        Searches Fragment embeddings in langchain_pg_embedding table,
+        scoped to a specific collection.
 
         Args:
             query_plan: Parsed query with embedding and filters
+            collection_name: Collection to search within (uses config default if None)
 
         Returns:
             List of search results ordered by similarity (highest first)
@@ -77,42 +78,47 @@ class VectorSearchEngine:
         if not self.config.pg_conn:
             return []
 
+        # Use provided collection_name or fall back to config
+        target_collection = collection_name or self.config.collection_name
+
         # Build WHERE clause for filters
         where_clauses = []
-        params: List = [self._format_vector(query_plan.query_embedding)]
+        where_params: List = []
+        vector = self._format_vector(query_plan.query_embedding)
 
         if query_plan.view_filter:
-            where_clauses.append("cmetadata->>'view' = %s")
-            params.append(query_plan.view_filter.value)
+            where_clauses.append("e.cmetadata->>'view' = %s")
+            where_params.append(query_plan.view_filter.value)
 
         if query_plan.language_filter:
-            where_clauses.append("cmetadata->>'lang' = %s")
-            params.append(query_plan.language_filter)
+            where_clauses.append("e.cmetadata->>'lang' = %s")
+            where_params.append(query_plan.language_filter)
 
         where_sql = " AND " + " AND ".join(where_clauses) if where_clauses else ""
 
-        # Add top_k parameter
-        params.append(query_plan.top_k)
-
         sql = f"""
         SELECT
-            cmetadata->>'fragment_id' AS fragment_id,
-            cmetadata->>'parent_id' AS parent_id,
-            cmetadata->>'view' AS view,
-            cmetadata->>'lang' AS lang,
-            document AS content,
-            1 - (embedding <=> %s::vector) AS similarity,
-            cmetadata AS metadata
-        FROM langchain_pg_embedding
-        WHERE 1=1{where_sql}
-        ORDER BY embedding <=> %s::vector
+            e.cmetadata->>'fragment_id' AS fragment_id,
+            e.cmetadata->>'parent_id' AS parent_id,
+            e.cmetadata->>'view' AS view,
+            e.cmetadata->>'lang' AS lang,
+            e.document AS content,
+            1 - (e.embedding <=> %s::vector) AS similarity,
+            e.cmetadata AS metadata
+        FROM langchain_pg_embedding e
+        JOIN langchain_pg_collection c ON e.collection_id = c.uuid
+        WHERE c.name = %s{where_sql}
+        ORDER BY e.embedding <=> %s::vector
         LIMIT %s
         """
 
-        # Add vector parameter again for ORDER BY
-        params.insert(1, self._format_vector(query_plan.query_embedding))
+        # Params order must match SQL: vector, collection_name, filters..., vector, limit
+        params: List = [vector, target_collection]
+        params.extend(where_params)
+        params.append(vector)
+        params.append(query_plan.top_k)
 
-        with psycopg.connect(self._pg_conn) as conn:
+        with self._pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
                 rows = cur.fetchall()
