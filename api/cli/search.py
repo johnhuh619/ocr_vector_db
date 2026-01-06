@@ -15,31 +15,12 @@ import argparse
 import sys
 from typing import Protocol
 
+from embedding import EmbeddingProviderFactory
 from shared.config import load_config
 
 from ..formatters import ResponseFormatter
 from ..use_cases import SearchUseCase
 from ..validators import RequestValidator, ValidationError
-
-
-class EmbeddingClientProtocol(Protocol):
-    """Protocol for embedding client."""
-
-    def embed_query(self, text: str):
-        """Generate embedding for query."""
-        ...
-
-
-def create_embedding_client():
-    """Create embedding client.
-
-    Note: This is a placeholder. Full implementation in Phase 7.
-
-    Returns:
-        Embedding client instance
-    """
-    # TODO: Phase 7 - Create actual embedding client
-    raise NotImplementedError("Embedding client creation pending Phase 7 integration")
 
 
 def main(args: argparse.Namespace) -> int:
@@ -63,8 +44,7 @@ def main(args: argparse.Namespace) -> int:
             RequestValidator.validate_top_k(args.top_k)
 
         # Create embedding client
-        # TODO: Phase 7 - Implement embedding client creation
-        embeddings_client = create_embedding_client()
+        embeddings_client = EmbeddingProviderFactory.create(config)
 
         # Execute search use case
         use_case = SearchUseCase(embeddings_client, config)
@@ -94,10 +74,6 @@ def main(args: argparse.Namespace) -> int:
     except ValidationError as e:
         print(ResponseFormatter.format_error(e))
         return 1
-    except NotImplementedError as e:
-        print(ResponseFormatter.format_error(e))
-        print("[NOTE] Full search implementation pending Phase 7 integration")
-        return 2
     except Exception as e:
         print(ResponseFormatter.format_error(e))
         return 2

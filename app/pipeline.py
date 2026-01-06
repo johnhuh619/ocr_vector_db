@@ -35,8 +35,8 @@ class DocumentBuilder:
 
     def __init__(self, text_splitter: Optional[RecursiveCharacterTextSplitter] = None):
         self.text_splitter = text_splitter or RecursiveCharacterTextSplitter(
-            chunk_size=1200,
-            chunk_overlap=150,
+            chunk_size=1200,  # Increased from 1200 for better context
+            chunk_overlap=300,  # Increased from 150 for better continuity
             separators=["\n##", "\n###", "\n\n", "\n", " ", ""],
             length_function=len,
             add_start_index=True,
