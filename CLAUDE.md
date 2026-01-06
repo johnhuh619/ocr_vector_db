@@ -131,7 +131,7 @@ python retriever_multi_view_demo.py "your search query"
 
 4. **Document Building** (`embedding/pipeline.py`)
    - `DocumentBuilder.build()`: Transforms units into LangChain `Document` objects
-   - Recursive text splitting (chunk_size=1200, overlap=150)
+   - Recursive text splitting (chunk_size=2000, overlap=300)
    - Code splitting preserves structure (avoids breaking mid-function)
    - Attaches metadata: source, view, kind, language, parent_id, unit_id, order
 
@@ -264,7 +264,7 @@ HNSW_EF_CONSTRUCTION=...         # pgvector HNSW index build tuning
 ### Modifying Chunking Strategy
 - Text chunking: Modify `DocumentBuilder.__init__()` RecursiveCharacterTextSplitter params
 - Code chunking: Modify `TextPreprocessor.split_code_safely()` logic
-- Default: chunk_size=1200, overlap=150
+- Default: chunk_size=2000, overlap=300
 
 ### Custom Metadata
 Add metadata fields in `DocumentBuilder.build()`:
