@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import List, Optional
 
-from .exceptions import FragmentTooShortError, OrphanEntityError
+from .exceptions import OrphanEntityError
 from .value_objects import ContentHash, View
 
 
@@ -52,6 +52,7 @@ class Concept:
     order: int = 0
     content: Optional[str] = None  # Parent document content for context
     metadata: dict = field(default_factory=dict)
+    fragments: List["Fragment"] = field(default_factory=list)
 
     def validate(self) -> None:
         """
@@ -94,19 +95,10 @@ class Fragment:
 
         Raises:
             OrphanEntityError: If concept_id is missing (HIER-003)
-            FragmentTooShortError: If content < 10 chars (FRAG-LEN-001)
         """
         if not self.concept_id:
             raise OrphanEntityError(
                 f"Fragment {self.id} violates HIER-003: Must belong to a Concept"
-            )
-
-        # Note: Minimum length check for *embedding eligibility*
-        # Storage can accept shorter fragments, but they won't be embedded
-        if len(self.content) < 10:
-            raise FragmentTooShortError(
-                f"Fragment {self.id} violates FRAG-LEN-001: "
-                f"Content must be >= 10 chars (got {len(self.content)})"
             )
 
     def is_embeddable(self) -> bool:

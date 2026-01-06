@@ -1,21 +1,25 @@
-"""PDF text extraction with fallback strategies."""
+"""PDF text extraction with pdfminer.six (legacy parser).
 
-import os
-import shutil
-import subprocess
-from typing import Optional
+NOTE: This is a legacy parser. For OCR support, use PyMuPdfParser instead.
+OCR is handled by Gemini Vision API, not ocrmypdf.
+"""
+
+import warnings
+from typing import List, Optional
+
+from shared.text_utils import TextPreprocessor
+
+from ..models import RawSegment
+from .base import BaseSegmentParser
+from .ocr import OcrParser
 
 
 class PdfExtractor:
-    """Extract text from PDF while falling back between multiple strategies."""
+    """Extract text from PDF using pdfminer.six."""
 
     def extract(self, pdf_path: str) -> Optional[str]:
         """
-        Extract text from PDF file.
-
-        Tries multiple strategies:
-        1. pdfminer.six library
-        2. pdftotext command-line tool (if available)
+        Extract text from PDF file using pdfminer.six.
 
         Args:
             pdf_path: Path to PDF file
@@ -23,7 +27,6 @@ class PdfExtractor:
         Returns:
             Extracted text or None if extraction fails
         """
-        # Strategy 1: pdfminer.six
         try:
             from pdfminer.high_level import extract_text as _extract
 
@@ -32,22 +35,6 @@ class PdfExtractor:
                 return text
         except Exception:
             pass
-
-        # Strategy 2: pdftotext command
-        if shutil.which("pdftotext"):
-            try:
-                tmp_txt = pdf_path + ".tmp.txt"
-                subprocess.run(["pdftotext", "-layout", pdf_path, tmp_txt], check=True)
-                with open(tmp_txt, "r", encoding="utf-8", errors="ignore") as handle:
-                    text = handle.read()
-                try:
-                    os.remove(tmp_txt)
-                except Exception:
-                    pass
-                if text and text.strip():
-                    return text
-            except Exception:
-                pass
         return None
 
     @staticmethod
@@ -70,4 +57,49 @@ class PdfExtractor:
         return ratio < min_ratio
 
 
-__all__ = ["PdfExtractor"]
+class PdfParser(BaseSegmentParser):
+    """Legacy PDF parser using pdfminer.six.
+
+    NOTE: This parser does NOT support OCR. For scanned PDFs or images,
+    use PyMuPdfParser with Gemini Vision OCR instead.
+
+    Set PDF_PARSER=pymupdf in environment to use the recommended parser.
+    """
+
+    def __init__(
+        self,
+        preprocessor: TextPreprocessor,
+        *,
+        enable_auto_ocr: bool = False,
+        force_ocr: bool = False,
+        ocr_languages: str = "kor+eng",
+    ):
+        super().__init__(preprocessor)
+        self.extractor = PdfExtractor()
+        self.text_parser = OcrParser(preprocessor)
+
+        # Warn if OCR is requested but not available in legacy parser
+        if enable_auto_ocr or force_ocr:
+            warnings.warn(
+                "PdfParser (pdfminer) does not support OCR. "
+                "Use PDF_PARSER=pymupdf with ENABLE_IMAGE_OCR=true for OCR support.",
+                UserWarning,
+            )
+
+    def parse(self, path: str) -> List[RawSegment]:
+        """
+        Parse a PDF file into segments.
+
+        Args:
+            path: Path to PDF file
+
+        Returns:
+            List of RawSegment objects
+        """
+        text = self.extractor.extract(path)
+        if not text:
+            return []
+        return self.text_parser.parse_text(text)
+
+
+__all__ = ["PdfExtractor", "PdfParser"]

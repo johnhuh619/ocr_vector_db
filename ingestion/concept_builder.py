@@ -1,5 +1,6 @@
 """Build domain Concepts from UnitizedSegments."""
 
+import hashlib
 import uuid
 from typing import Dict, List
 
@@ -87,11 +88,14 @@ class ConceptBuilder:
         order: int,
     ) -> Concept:
         """Create Concept from unitized segments with same unit_id."""
+        # Generate document-scoped concept_id to prevent cross-document conflicts
+        # Same content in different documents will have different concept IDs
+        scoped_id = hashlib.md5(f"{document.id}|{unit_id}".encode("utf-8")).hexdigest()[:16]
         concept = Concept(
-            id=unit_id,  # Use unit_id as concept_id
+            id=scoped_id,  # Document-scoped concept_id
             document_id=document.id,
             order=order,
-            metadata={"unit_type": "semantic_unit"},
+            metadata={"unit_type": "semantic_unit", "original_unit_id": unit_id},
         )
         concept.validate()  # Enforce HIER-002
 
@@ -103,11 +107,11 @@ class ConceptBuilder:
                 segment=unit_seg,
                 order=idx,
             )
-            fragment.validate()  # Enforce HIER-003, FRAG-LEN-001
+            fragment.validate()  # Enforce HIER-003; embedding rules are checked later
             fragments.append(fragment)
 
-        # Store fragments in metadata (storage layer will handle persistence)
-        concept.metadata["fragments"] = fragments
+        # Keep fragments on the concept instance for downstream processing.
+        concept.fragments = fragments
         return concept
 
     def _create_concept_from_orphans(
@@ -118,7 +122,10 @@ class ConceptBuilder:
         order: int,
     ) -> Concept:
         """Create Concept for segments without unit_id."""
-        concept_id = f"{source_basename}-orphans-{uuid.uuid4()}"
+        # Generate deterministic concept_id from document_id + orphan content hash
+        orphan_content = "".join(s.segment.content[:100] for s in orphan_segments[:5])
+        content_hash = hashlib.md5(orphan_content.encode("utf-8", errors="ignore")).hexdigest()[:8]
+        concept_id = f"{document.id[:8]}-orphans-{content_hash}"
         concept = Concept(
             id=concept_id,
             document_id=document.id,
@@ -137,7 +144,7 @@ class ConceptBuilder:
             fragment.validate()
             fragments.append(fragment)
 
-        concept.metadata["fragments"] = fragments
+        concept.fragments = fragments
         return concept
 
     def _create_fragment(
@@ -160,8 +167,14 @@ class ConceptBuilder:
         # Map segment kind to View
         view = self._map_kind_to_view(segment.segment.kind)
 
+        # Generate deterministic fragment_id from concept_id + order + content hash
+        content_hash = hashlib.md5(
+            segment.segment.content[:200].encode("utf-8", errors="ignore")
+        ).hexdigest()[:8]
+        fragment_id = f"{concept_id[:12]}-{order}-{content_hash}"
+
         fragment = Fragment(
-            id=str(uuid.uuid4()),
+            id=fragment_id,
             concept_id=concept_id,  # Set parent_id at creation (FRAG-IMMUT-001)
             content=segment.segment.content,
             view=view,

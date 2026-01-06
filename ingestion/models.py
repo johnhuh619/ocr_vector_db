@@ -1,7 +1,7 @@
 """Data models for ingestion layer."""
 
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Optional, Tuple
 
 
 @dataclass
@@ -13,10 +13,12 @@ class RawSegment:
     any semantic grouping or concept identification.
     """
 
-    kind: str  # "text" | "code" | "image"
+    kind: str  # "text" | "code" | "image" | "table"
     content: str
     language: Optional[str]  # e.g., "python", "javascript", "image"
     order: int
+    page: Optional[int] = None  # Page number (0-indexed)
+    bbox: Optional[Tuple[float, float, float, float]] = None  # (x0, y0, x1, y1)
 
 
 @dataclass

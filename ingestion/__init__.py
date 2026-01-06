@@ -10,7 +10,15 @@ Rules:
 
 from .concept_builder import ConceptBuilder
 from .models import RawSegment, UnitizedSegment
-from .parsers import BaseSegmentParser, MarkdownParser, OcrParser, PdfExtractor
+from .parsers import (
+    BaseSegmentParser,
+    GeminiVisionOcr,
+    MarkdownParser,
+    OcrParser,
+    PdfExtractor,
+    PdfParser,
+    PyMuPdfParser,
+)
 from .segmentation import SegmentUnitizer
 
 __all__ = [
@@ -22,6 +30,9 @@ __all__ = [
     "OcrParser",
     "MarkdownParser",
     "PdfExtractor",
+    "PdfParser",
+    "GeminiVisionOcr",
+    "PyMuPdfParser",
     # Segmentation
     "SegmentUnitizer",
     # Concept Building
