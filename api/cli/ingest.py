@@ -73,7 +73,13 @@ def main(args: argparse.Namespace) -> int:
         print(f"[ingest] Processing {len(file_paths)} file(s)")
 
         # Execute ingestion use case
-        use_case = IngestUseCase(config)
+        # --force-ocr flag disables OCR cache
+        disable_cache = getattr(args, 'force_ocr', False)
+        if disable_cache:
+            print("[cache] Cache disabled (--force-ocr)")
+        
+        use_case = IngestUseCase(config, disable_cache=disable_cache)
+        
         result = use_case.execute(file_paths)
 
         # Format and display results
@@ -130,6 +136,12 @@ Examples:
         "--dry-run",
         action="store_true",
         help="Parse files without writing to database",
+    )
+
+    parser.add_argument(
+        "--force-ocr",
+        action="store_true",
+        help="Force OCR even if cache exists (bypass .pdf.ocr.md cache)",
     )
 
     return parser

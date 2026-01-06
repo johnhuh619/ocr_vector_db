@@ -152,6 +152,7 @@ class PyMuPdfParser(BaseSegmentParser):
         min_text_length: int = 10,
         enable_auto_ocr: bool = False,
         force_ocr: bool = False,
+        use_cache: bool = True,
     ):
         """Initialize PyMuPDF parser.
 
@@ -161,12 +162,14 @@ class PyMuPdfParser(BaseSegmentParser):
             min_text_length: Minimum text length to include (filters noise)
             enable_auto_ocr: Enable Gemini Vision OCR fallback for sparse text PDFs
             force_ocr: Force OCR mode - render all pages as images and OCR
+            use_cache: Enable OCR result caching (.pdf.ocr.md files)
         """
         super().__init__(preprocessor)
         self.ocr = ocr
         self.min_text_length = min_text_length
         self.enable_auto_ocr = enable_auto_ocr
         self.force_ocr = force_ocr
+        self.use_cache = use_cache
         self.text_parser = OcrParser(preprocessor)
 
     def parse(self, path: str) -> List[RawSegment]:
@@ -189,8 +192,23 @@ class PyMuPdfParser(BaseSegmentParser):
         # Force OCR mode: render all pages as images and OCR via Gemini
         if self.force_ocr:
             if self.ocr:
+                # Check for cached OCR result (JSON format)
+                cache_path = path + ".ocr.json"
+                if self.use_cache and os.path.exists(cache_path):
+                    print(f"[cache] Loading OCR cache from {os.path.basename(cache_path)}")
+                    doc.close()
+                    return self._load_cache(cache_path)
+                
+                # Run OCR
                 segments = self._ocr_all_pages(doc)
                 doc.close()
+                
+                # Save to cache
+                if self.use_cache and segments:
+                    self._save_cache(cache_path, segments)
+                    print(f"[cache] Saved OCR cache to {os.path.basename(cache_path)}")
+                
+                
                 return segments
             else:
                 # Fallback: force_ocr=True but no OCR provider - use text extraction
@@ -453,6 +471,61 @@ class PyMuPdfParser(BaseSegmentParser):
                 print(f"[parse] Gemini Vision OCR failed for page {page_num}: {e}")
 
         return segments
+
+    def _save_cache(self, cache_path: str, segments: List[RawSegment]) -> None:
+        """Save OCR results to cache file.
+
+        Format: JSON for exact reconstruction of segments.
+        """
+        import json
+        try:
+            # Use .json extension instead of .md
+            json_path = cache_path.replace('.ocr.md', '.ocr.json')
+            data = [
+                {
+                    "kind": seg.kind,
+                    "content": seg.content,
+                    "language": seg.language,
+                    "order": seg.order,
+                    "page": seg.page,
+                }
+                for seg in segments
+            ]
+            with open(json_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"[cache] Failed to save cache: {e}")
+
+    def _load_cache(self, cache_path: str) -> List[RawSegment]:
+        """Load OCR results from cache file.
+
+        Loads JSON cache and reconstructs RawSegment objects.
+        """
+        import json
+        try:
+            # Check for JSON cache first
+            json_path = cache_path.replace('.ocr.md', '.ocr.json')
+            if os.path.exists(json_path):
+                cache_path = json_path
+            
+            with open(cache_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            
+            segments = [
+                RawSegment(
+                    kind=item["kind"],
+                    content=item["content"],
+                    language=item.get("language"),
+                    order=item["order"],
+                    page=item.get("page"),
+                    bbox=None,
+                )
+                for item in data
+            ]
+            return segments
+        except Exception as e:
+            print(f"[cache] Failed to load cache: {e}")
+            return []
 
 
 __all__ = ["GeminiVisionOcr", "PyMuPdfParser", "OcrProvider"]

@@ -77,8 +77,9 @@ class IngestUseCase:
         >>> result = use_case.execute(["file1.txt", "file2.md"])
     """
 
-    def __init__(self, config: EmbeddingConfig):
+    def __init__(self, config: EmbeddingConfig, disable_cache: bool = False):
         self.config = config
+        self.disable_cache = disable_cache
         self.preprocessor = TextPreprocessor()
         self.validator = EmbeddingValidator()
         self.unitizer = SegmentUnitizer(text_unit_threshold=config.text_unit_threshold)
@@ -224,11 +225,14 @@ class IngestUseCase:
                 except RuntimeError as e:
                     print(f"[setup] Gemini Vision OCR disabled: {e}")
 
+            # use_cache is enabled by default, disabled when force_ocr is set via CLI
+            use_cache = not getattr(self, 'disable_cache', False)
             return PyMuPdfParser(
                 self.preprocessor,
                 ocr=ocr,
                 enable_auto_ocr=self.config.enable_auto_ocr,
                 force_ocr=self.config.force_ocr,
+                use_cache=use_cache,
             )
         else:
             # Legacy pdfminer-based parser

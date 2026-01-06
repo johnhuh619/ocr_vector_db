@@ -59,14 +59,13 @@ class EmbeddingValidator:
         r"^\s*\d+\.\s*$",  # List numbers like "1."
     ]
 
-    # Reference keywords for detection
-    REFERENCE_KEYWORDS_EN = ["see", "refer", "reference", "figure", "table", "section", "chapter"]
-    REFERENCE_KEYWORDS_KO = [
-        "참조", "참고", "보기", "확인",  # Verbs
-        "그림", "표", "도표", "사진", "이미지", "그래프", "차트",  # Visual materials
-        "장", "절", "항", "편",  # Sections
-        "예제", "코드", "샘플",  # Code-related
-    ]
+    # Reference action verbs (must appear with target object to be filtered)
+    REFERENCE_VERBS_EN = ["see", "refer", "reference"]
+    REFERENCE_VERBS_KO = ["참조", "참고", "보기", "확인"]
+    
+    # Reference target objects (filtered only when paired with action verb)
+    REFERENCE_TARGETS_EN = ["figure", "table", "section", "chapter", "appendix"]
+    REFERENCE_TARGETS_KO = ["그림", "표", "도표", "장", "절", "항"]
 
     def __init__(self):
         # Combine all pattern categories into a single regex
@@ -128,24 +127,28 @@ class EmbeddingValidator:
     def _is_pure_reference(self, content: str) -> bool:
         """Check if content is just a reference to something else.
 
-        Only filters very short text (< 20 chars) to prevent false positives
-        where reference keywords appear in valid sentences.
+        Must have BOTH action verb AND target object to be filtered.
+        This prevents filtering standalone terms like "코드 1-1" or "그림 2".
         """
         content_stripped = content.strip()
 
-        # Only check very short text to prevent false positives
-        # Example: "그림 3의 분포를 분석하면..." (22 chars) is valid, not a pure reference
-        # Example: "그림 3 참조" (7 chars) is a pure reference
-        # Example: "See Figure 3" (12 chars) is a pure reference
-        if len(content_stripped) < 20:
+        # Only check very short text (<15 chars) to prevent false positives
+        # Example: "그림 3 참조" (7 chars) is a pure reference -> filter
+        # Example: "코드 1-1" (6 chars) is a valid heading -> keep
+        # Example: "See Figure 3" (12 chars) is a pure reference -> filter
+        if len(content_stripped) < 15:
             content_lower = content_stripped.lower()
 
-            # Check English keywords (case-insensitive)
-            if any(kw in content_lower for kw in self.REFERENCE_KEYWORDS_EN):
+            # Check English: must have both verb AND target
+            has_en_verb = any(v in content_lower for v in self.REFERENCE_VERBS_EN)
+            has_en_target = any(t in content_lower for t in self.REFERENCE_TARGETS_EN)
+            if has_en_verb and has_en_target:
                 return True
 
-            # Check Korean keywords (case-sensitive, Korean has no case)
-            if any(kw in content_stripped for kw in self.REFERENCE_KEYWORDS_KO):
+            # Check Korean: must have both verb AND target
+            has_ko_verb = any(v in content_stripped for v in self.REFERENCE_VERBS_KO)
+            has_ko_target = any(t in content_stripped for t in self.REFERENCE_TARGETS_KO)
+            if has_ko_verb and has_ko_target:
                 return True
 
         return False
