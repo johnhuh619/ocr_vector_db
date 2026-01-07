@@ -44,6 +44,17 @@ class EmbeddingConfig:
     pg_pool_max_size: int = 4
 
 
+@dataclass
+class GenerationConfig:
+    """Configuration for generation pipeline (RAG)."""
+
+    llm_model: str  # Gemini model for generation
+    temperature: float  # Generation temperature (0-1)
+    max_tokens: int  # Maximum output tokens
+    enable_query_optimization: bool  # Use LLM for query optimization
+    enable_conversation: bool  # Enable multi-turn conversation
+
+
 def _parse_int(value: Optional[str], default: int = 0) -> int:
     if value is None or value == "":
         return default
@@ -113,4 +124,21 @@ def load_config() -> EmbeddingConfig:
     return config
 
 
-__all__ = ["EmbeddingConfig", "load_config"]
+def load_generation_config() -> GenerationConfig:
+    """Load generation configuration from environment variables."""
+    load_dotenv()
+
+    return GenerationConfig(
+        llm_model=os.getenv("GEMINI_LLM_MODEL", "gemini-2.0-flash"),
+        temperature=float(os.getenv("LLM_TEMPERATURE", "0.7")),
+        max_tokens=_parse_int(os.getenv("LLM_MAX_TOKENS"), 2048),
+        enable_query_optimization=_parse_bool(
+            os.getenv("ENABLE_QUERY_OPTIMIZATION", "true"), True
+        ),
+        enable_conversation=_parse_bool(
+            os.getenv("ENABLE_CONVERSATION", "false"), False
+        ),
+    )
+
+
+__all__ = ["EmbeddingConfig", "load_config", "GenerationConfig", "load_generation_config"]

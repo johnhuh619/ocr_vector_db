@@ -12,6 +12,7 @@ Rules:
 
 from typing import List, Optional, Protocol
 
+
 from retrieval import ExpandedResult, RetrievalPipeline
 from shared.config import EmbeddingConfig
 
@@ -31,22 +32,28 @@ class SearchUseCase:
 
     Pipeline:
     1. Validate query (validators.py)
-    2. Interpret query (retrieval layer)
-    3. Execute vector search (retrieval layer)
-    4. Expand context (retrieval layer)
-    5. Format results (formatters.py)
+    2. Optimize query (optional, with LLM)
+    3. Interpret query (retrieval layer)
+    4. Execute vector search (retrieval layer)
+    5. Expand context (retrieval layer)
+    6. Format results (formatters.py)
 
     Example:
         >>> use_case = SearchUseCase(embeddings_client, config)
         >>> results = use_case.execute("python list comprehension", view="code", top_k=5)
+        
+        # With query optimization:
+        >>> use_case = SearchUseCase(embeddings_client, config, llm_client=llm)
+        >>> results = use_case.execute("멀티 벡터 리트리빙이란?")
     """
 
     def __init__(
         self,
         embeddings_client: EmbeddingClientProtocol,
         config: EmbeddingConfig,
+        llm_client=None,  # Optional LLM client for query optimization
     ):
-        self.pipeline = RetrievalPipeline(embeddings_client, config)
+        self.pipeline = RetrievalPipeline(embeddings_client, config, llm_client=llm_client)
 
     def execute(
         self,
@@ -55,6 +62,7 @@ class SearchUseCase:
         language: Optional[str] = None,
         top_k: int = 10,
         expand_context: bool = True,
+        optimize_query: bool = True,
     ) -> List[ExpandedResult]:
         """Execute search pipeline.
 
@@ -64,6 +72,7 @@ class SearchUseCase:
             language: Optional language filter (python, javascript, etc.)
             top_k: Number of results to retrieve
             expand_context: Whether to fetch parent context
+            optimize_query: Whether to use QueryOptimizer (if available)
 
         Returns:
             List of search results with optional context
@@ -75,7 +84,9 @@ class SearchUseCase:
             language=language,
             top_k=top_k,
             expand_context=expand_context,
+            optimize_query=optimize_query,
         )
 
 
 __all__ = ["SearchUseCase"]
+

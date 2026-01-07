@@ -21,22 +21,42 @@ class RetrievalPipeline:
     """Orchestrates the complete retrieval pipeline.
 
     Pipeline stages:
-    1. Query interpretation (QueryInterpreter)
-    2. Vector similarity search (VectorSearchEngine)
-    3. Context expansion (ContextExpander)
-    4. Result grouping (ResultGrouper)
+    1. Query optimization (QueryOptimizer) - optional, if LLM client provided
+    2. Query interpretation (QueryInterpreter)
+    3. Vector similarity search (VectorSearchEngine)
+    4. Context expansion (ContextExpander)
+    5. Result grouping (ResultGrouper)
 
     Example:
         >>> pipeline = RetrievalPipeline(embeddings_client, config)
         >>> results = pipeline.retrieve("python list comprehension", view="code", top_k=5)
+        
+        # With query optimization:
+        >>> pipeline = RetrievalPipeline(embeddings_client, config, llm_client=llm)
+        >>> results = pipeline.retrieve("멀티 벡터 리트리빙이란?")
     """
 
-    def __init__(self, embeddings_client: EmbeddingClientProtocol, config: EmbeddingConfig):
+    def __init__(
+        self,
+        embeddings_client: EmbeddingClientProtocol,
+        config: EmbeddingConfig,
+        llm_client=None,  # Optional LLM client for query optimization
+    ):
         self.config = config
         self.query_interpreter = QueryInterpreter(embeddings_client, config)
         self.search_engine = VectorSearchEngine(config)
         self.context_expander = ContextExpander(config)
         self.grouper = ResultGrouper()
+        
+        # Optional query optimizer (requires LLM client)
+        self.query_optimizer = None
+        if llm_client is not None:
+            try:
+                from generation import QueryOptimizer
+                self.query_optimizer = QueryOptimizer(llm_client)
+                print("[pipeline] QueryOptimizer enabled for keyword extraction")
+            except ImportError:
+                pass
 
     def retrieve(
         self,
@@ -46,6 +66,7 @@ class RetrievalPipeline:
         top_k: int = 10,
         expand_context: bool = True,
         deduplicate: bool = True,
+        optimize_query: bool = True,  # Enable query optimization
     ) -> List[ExpandedResult]:
         """Execute complete retrieval pipeline.
 
@@ -56,15 +77,38 @@ class RetrievalPipeline:
             top_k: Number of results to retrieve
             expand_context: Whether to fetch parent context
             deduplicate: Whether to remove duplicate results
+            optimize_query: Whether to use QueryOptimizer (if available)
 
         Returns:
             List of search results with optional parent context
         """
+        search_query = query
+        optimized_view = view
+        optimized_language = language
+        
+        # Stage 0: Query optimization (if available and enabled)
+        if optimize_query and self.query_optimizer:
+            try:
+                optimized = self.query_optimizer.optimize(query)
+                search_query = optimized.rewritten
+                
+                # Use optimizer hints if not explicitly provided
+                if not view and optimized.view_hint:
+                    optimized_view = optimized.view_hint
+                if not language and optimized.language_hint:
+                    optimized_language = optimized.language_hint
+                    
+                print(f"[optimize] '{query}' -> '{search_query}'")
+                if optimized.keywords:
+                    print(f"[optimize] Keywords: {optimized.keywords}")
+            except Exception as e:
+                print(f"[optimize] Fallback to original query: {e}")
+        
         # Stage 1: Query interpretation
         query_plan = self.query_interpreter.interpret(
-            query=query,
-            view=view,
-            language=language,
+            query=search_query,
+            view=optimized_view,
+            language=optimized_language,
             top_k=top_k,
         )
 
