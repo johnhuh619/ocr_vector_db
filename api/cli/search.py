@@ -46,14 +46,25 @@ def main(args: argparse.Namespace) -> int:
         # Create embedding client
         embeddings_client = EmbeddingProviderFactory.create(config)
 
+        # Create LLM client for query optimization (if --optimize flag)
+        llm_client = None
+        if getattr(args, 'optimize', False):
+            try:
+                from generation import GeminiLLMClient
+                llm_client = GeminiLLMClient()
+                print("[search] Query optimization enabled")
+            except Exception as e:
+                print(f"[search] Query optimization disabled: {e}")
+
         # Execute search use case
-        use_case = SearchUseCase(embeddings_client, config)
+        use_case = SearchUseCase(embeddings_client, config, llm_client=llm_client)
         results = use_case.execute(
             query=args.query,
             view=args.view,
             language=args.language,
             top_k=args.top_k or 10,
             expand_context=not args.no_context,
+            optimize_query=llm_client is not None,
         )
 
         # Format and display results
@@ -143,6 +154,12 @@ Examples:
         "--json",
         action="store_true",
         help="Output results as JSON",
+    )
+
+    parser.add_argument(
+        "--optimize",
+        action="store_true",
+        help="Enable query optimization (extract keywords using LLM)",
     )
 
     return parser

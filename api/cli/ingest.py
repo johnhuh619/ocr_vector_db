@@ -73,10 +73,11 @@ def main(args: argparse.Namespace) -> int:
         print(f"[ingest] Processing {len(file_paths)} file(s)")
 
         # Execute ingestion use case
-        # --force-ocr flag disables OCR cache
+        # --force-ocr flag disables OCR cache and enables force OCR mode
         disable_cache = getattr(args, 'force_ocr', False)
         if disable_cache:
             print("[cache] Cache disabled (--force-ocr)")
+            config.force_ocr = True  # Enable force OCR mode in config
         
         use_case = IngestUseCase(config, disable_cache=disable_cache)
         
