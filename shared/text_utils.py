@@ -5,6 +5,7 @@ from typing import List, Optional
 class TextPreprocessor:
     """High-level text preprocessing helpers for OCR/markdown content."""
 
+    # Ligature and smart quote normalization
     NORMALIZE_MAP = {
         "\uFB03": "ffi",
         "\uFB01": "fi",
@@ -17,8 +18,50 @@ class TextPreprocessor:
         "\u2014": "-",
     }
 
+    # OCR artifact cleanup: fullwidth → halfwidth conversion
+    OCR_ARTIFACT_MAP = {
+        "（": "(",  # fullwidth parentheses
+        "）": ")",
+        "，": ",",  # fullwidth comma
+        "：": ":",  # fullwidth colon
+        "；": ";",  # fullwidth semicolon
+        "'": "'",  # fullwidth quotes
+        "'": "'",
+        """: '"',
+        """: '"',
+        "｛": "{",  # fullwidth braces
+        "｝": "}",
+        "［": "[",  # fullwidth brackets
+        "］": "]",
+        "．": ".",  # fullwidth period
+        "　": " ",  # fullwidth space
+        "！": "!",  # fullwidth exclamation
+        "？": "?",  # fullwidth question
+        "＝": "=",  # fullwidth equals
+        "＋": "+",  # fullwidth plus
+        "－": "-",  # fullwidth minus
+        "＊": "*",  # fullwidth asterisk
+        "／": "/",  # fullwidth slash
+        "＜": "<",  # fullwidth angle brackets
+        "＞": ">",
+    }
+
+    # OCR error correction patterns (regex pattern -> replacement)
+    # Only GENERAL rules that apply universally to code OCR
+    OCR_FIX_PATTERNS = [
+        # Fix import path comma→dot (common OCR confusion: . vs ,)
+        (r"(from\s+[\w_]+),([\w_]+)", r"\1.\2"),  # from pkg,module → from pkg.module
+        (r"(import\s+[\w_]+),([\w_]+)", r"\1.\2"),  # import pkg,module → import pkg.module
+        
+        # Normalize spacing around = in assignments (code readability)
+        (r"(\w+)\s+=\s+'", r"\1='"),  # var = 'x' → var='x' (compact form)
+        
+        # Remove standalone page numbers at end of line (very common in book OCR)
+        (r"\s+\d{1,3}\s*$", ""),  # trailing page numbers
+    ]
+
     CODE_HINT = re.compile(
-        r"```|;\s*$|{\s*$|^\s*(def|class|import|from|async|await|try|except|with|for|while|return|lambda|console\.log|function|const|let|var|=>|export\s+default|import\s+.+\s+from)\b",
+        r"```|코드\s+\d+-\d+|;\s*$|{\s*$|^\s*(def|class|import|from|async|await|try|except|with|for|while|return|lambda|console\.log|function|const|let|var|=>|export\s+default|import\s+.+\s+from)\b",
         re.M,
     )
     PY_SIGNS = re.compile(r"^\s*(def|class|from|import|try|except|with|async|await|lambda)\b|:\s*$", re.M)
@@ -28,11 +71,20 @@ class TextPreprocessor:
     )
 
     def normalize(self, text: str) -> str:
+        # Apply ligature and smart quote normalization
         for src, target in self.NORMALIZE_MAP.items():
+            text = text.replace(src, target)
+        # Apply OCR artifact cleanup (fullwidth → halfwidth)
+        for src, target in self.OCR_ARTIFACT_MAP.items():
             text = text.replace(src, target)
         text = re.sub(r"\u00A0", " ", text)  # non-breaking space
         text = re.sub(r"[ \t]+\n", "\n", text)  # trailing whitespace per line
         text = re.sub(r"\n{3,}", "\n\n", text)  # collapse excessive newlines
+        
+        # Apply OCR error correction patterns (regex-based)
+        for pattern, replacement in self.OCR_FIX_PATTERNS:
+            text = re.sub(pattern, replacement, text, flags=re.MULTILINE)
+        
         return text.strip()
 
     @staticmethod
