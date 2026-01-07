@@ -8,6 +8,7 @@ Rules:
 - DEP-ING-001~004: MUST NOT import embedding, retrieval, storage, api
 """
 
+from .chunking import TextChunker
 from .concept_builder import ConceptBuilder
 from .models import RawSegment, UnitizedSegment
 from .parsers import (
@@ -35,6 +36,8 @@ __all__ = [
     "PyMuPdfParser",
     # Segmentation
     "SegmentUnitizer",
+    # Chunking
+    "TextChunker",
     # Concept Building
     "ConceptBuilder",
 ]

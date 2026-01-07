@@ -6,6 +6,7 @@ from typing import Dict, List
 
 from domain import Concept, Document, Fragment, View
 
+from .chunking import TextChunker
 from .models import UnitizedSegment
 
 
@@ -121,7 +122,11 @@ class ConceptBuilder:
         source_basename: str,
         order: int,
     ) -> Concept:
-        """Create Concept for segments without unit_id."""
+        """Create Concept for segments without unit_id.
+
+        Orphan text segments are chunked together to create more meaningful
+        fragments for embedding, improving similarity scores.
+        """
         # Generate deterministic concept_id from document_id + orphan content hash
         orphan_content = "".join(s.segment.content[:100] for s in orphan_segments[:5])
         content_hash = hashlib.md5(orphan_content.encode("utf-8", errors="ignore")).hexdigest()[:8]
@@ -134,8 +139,45 @@ class ConceptBuilder:
         )
         concept.validate()
 
+        # Separate text and non-text segments
+        text_segments = [s for s in orphan_segments if s.segment.kind == "text"]
+        non_text_segments = [s for s in orphan_segments if s.segment.kind != "text"]
+
         fragments: List[Fragment] = []
-        for idx, unit_seg in enumerate(orphan_segments):
+        idx = 0
+
+        # Chunk text segments together for better embedding quality
+        if text_segments:
+            combined_text = "\n\n".join(s.segment.content for s in text_segments)
+            chunker = TextChunker(chunk_size=1500, chunk_overlap=0)
+            chunks = chunker.chunk(combined_text)
+
+            for chunk in chunks:
+                # Create a synthetic UnitizedSegment for the chunk
+                from .models import RawSegment
+                synthetic_seg = UnitizedSegment(
+                    unit_id=None,
+                    role="chunked_text",
+                    segment=RawSegment(
+                        kind="text",
+                        content=chunk,
+                        language=None,
+                        order=idx,
+                        page=text_segments[0].segment.page if text_segments else None,
+                        bbox=None,
+                    ),
+                )
+                fragment = self._create_fragment(
+                    concept_id=concept.id,
+                    segment=synthetic_seg,
+                    order=idx,
+                )
+                fragment.validate()
+                fragments.append(fragment)
+                idx += 1
+
+        # Process non-text segments individually (code, image)
+        for unit_seg in non_text_segments:
             fragment = self._create_fragment(
                 concept_id=concept.id,
                 segment=unit_seg,
@@ -143,6 +185,7 @@ class ConceptBuilder:
             )
             fragment.validate()
             fragments.append(fragment)
+            idx += 1
 
         concept.fragments = fragments
         return concept
