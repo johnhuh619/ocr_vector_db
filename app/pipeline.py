@@ -248,7 +248,7 @@ class EmbeddingPipeline:
             connection=self.config.pg_conn,
             embeddings=embeddings,
             collection_name=self.config.collection_name,
-            distance_strategy="COSINE",
+            distance_strategy="cosine",
             use_jsonb=True,
             embedding_length=self.config.embedding_dim,
         )

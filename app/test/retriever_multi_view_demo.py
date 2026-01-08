@@ -94,7 +94,7 @@ def build_retriever():
         connection=PG_CONN,
         collection_name=COLLECTION,
         embeddings=embeddings,
-        distance_strategy="COSINE",
+        distance_strategy="cosine",
         use_jsonb=True,
         embedding_length=EMBEDDING_DIM,
     )

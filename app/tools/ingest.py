@@ -57,7 +57,7 @@ def run(args: argparse.Namespace) -> int:
             connection=emb.PG_CONN,
             embeddings=embeddings,
             collection_name=emb.COLLECTION,
-            distance_strategy="COSINE",
+            distance_strategy="cosine",
             use_jsonb=True,
             embedding_length=emb.EMBDDING_DIM,
         )

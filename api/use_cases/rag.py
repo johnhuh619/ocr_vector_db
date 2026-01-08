@@ -18,7 +18,6 @@ from generation import (
     GeneratedResponse,
     GenerationPipeline,
     GeminiLLMClient,
-    QueryOptimizer,
 )
 from retrieval import RetrievalPipeline
 from shared.config import EmbeddingConfig, GenerationConfig
@@ -38,10 +37,10 @@ class RAGUseCase:
     Implements PKG-API-004 (orchestration).
 
     Pipeline:
-    1. Optimize query (generation layer) - extract keywords, hints
-    2. Retrieve relevant context (retrieval layer)
-    3. Generate response (generation layer)
-    4. Format with source attribution
+    1. Retrieve relevant context (retrieval layer with SelfQueryRetriever)
+       - SelfQueryRetriever automatically extracts metadata filters (view, language)
+    2. Generate response (generation layer)
+    3. Format with source attribution
 
     Example:
         >>> use_case = RAGUseCase(embeddings_client, embed_config, gen_config)
@@ -63,16 +62,16 @@ class RAGUseCase:
             embed_config: Embedding/retrieval configuration
             gen_config: Generation configuration
         """
-        # Retrieval pipeline
-        self.retrieval = RetrievalPipeline(embeddings_client, embed_config)
+        # Retrieval pipeline with SelfQueryRetriever (auto-extracts view/language filters)
+        # use_self_query=True by default, creates its own LLM internally
+        self.retrieval = RetrievalPipeline(
+            embeddings_client,
+            embed_config,
+            use_self_query=True,  # Enable SelfQueryRetriever
+        )
 
-        # LLM client
+        # LLM client for generation
         self.llm_client = GeminiLLMClient(model=gen_config.llm_model)
-
-        # Query optimizer (optional)
-        self.query_optimizer = None
-        if gen_config.enable_query_optimization:
-            self.query_optimizer = QueryOptimizer(self.llm_client)
 
         # Generation pipeline
         self.generation = GenerationPipeline(
@@ -98,50 +97,35 @@ class RAGUseCase:
 
         Args:
             query: User question
-            view: Optional view filter (overrides optimizer hint)
-            language: Optional language filter (overrides optimizer hint)
+            view: Optional view filter (explicit override, otherwise auto-detected)
+            language: Optional language filter (explicit override, otherwise auto-detected)
             top_k: Number of results to retrieve
             use_conversation: Whether to use conversation history
 
         Returns:
             Generated response with sources
         """
-        optimized = None
-
-        # Stage 1: Query optimization (optional)
-        if self.query_optimizer:
-            optimized = self.query_optimizer.optimize(query)
-
-            # Use optimizer hints if not explicitly provided
-            if view is None and optimized.view_hint:
-                view = optimized.view_hint
-            if language is None and optimized.language_hint:
-                language = optimized.language_hint
-
-            # Use optimized query for retrieval
-            search_query = optimized.rewritten
-        else:
-            search_query = query
-
-        # Stage 2: Retrieval
+        # Stage 1: Retrieval with SelfQueryRetriever
+        # SelfQueryRetriever automatically extracts view/language filters from the query
+        # Explicit view/language parameters override auto-detection
         results = self.retrieval.retrieve(
-            query=search_query,
+            query=query,
             view=view,
             language=language,
             top_k=top_k,
             expand_context=True,
+            use_self_query=True,  # Use SelfQueryRetriever
         )
 
-        # Stage 3: Generation
+        # Stage 2: Generation
         conversation = None
         if use_conversation and self.conversation:
             conversation = self.conversation
 
         response = self.generation.generate(
-            query=query,  # Use original query for generation
+            query=query,
             results=results,
             conversation=conversation,
-            optimized_query=optimized,
         )
 
         # Track conversation

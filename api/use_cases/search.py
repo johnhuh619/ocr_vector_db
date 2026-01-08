@@ -32,28 +32,27 @@ class SearchUseCase:
 
     Pipeline:
     1. Validate query (validators.py)
-    2. Optimize query (optional, with LLM)
-    3. Interpret query (retrieval layer)
-    4. Execute vector search (retrieval layer)
-    5. Expand context (retrieval layer)
-    6. Format results (formatters.py)
+    2. Retrieve with SelfQueryRetriever (auto-extracts filters)
+    3. Expand context (retrieval layer)
+    4. Format results (formatters.py)
 
     Example:
         >>> use_case = SearchUseCase(embeddings_client, config)
         >>> results = use_case.execute("python list comprehension", view="code", top_k=5)
-        
-        # With query optimization:
-        >>> use_case = SearchUseCase(embeddings_client, config, llm_client=llm)
-        >>> results = use_case.execute("멀티 벡터 리트리빙이란?")
     """
 
     def __init__(
         self,
         embeddings_client: EmbeddingClientProtocol,
         config: EmbeddingConfig,
-        llm_client=None,  # Optional LLM client for query optimization
+        llm_client=None,  # Deprecated, kept for backwards compatibility
     ):
-        self.pipeline = RetrievalPipeline(embeddings_client, config, llm_client=llm_client)
+        # SelfQueryRetriever is enabled by default (creates its own LLM)
+        self.pipeline = RetrievalPipeline(
+            embeddings_client, 
+            config, 
+            use_self_query=True,
+        )
 
     def execute(
         self,
@@ -62,7 +61,7 @@ class SearchUseCase:
         language: Optional[str] = None,
         top_k: int = 10,
         expand_context: bool = True,
-        optimize_query: bool = True,
+        optimize_query: bool = True,  # Deprecated, ignored (SelfQueryRetriever handles this)
     ) -> List[ExpandedResult]:
         """Execute search pipeline.
 
@@ -72,21 +71,19 @@ class SearchUseCase:
             language: Optional language filter (python, javascript, etc.)
             top_k: Number of results to retrieve
             expand_context: Whether to fetch parent context
-            optimize_query: Whether to use QueryOptimizer (if available)
+            optimize_query: Deprecated, ignored (SelfQueryRetriever auto-extracts)
 
         Returns:
             List of search results with optional context
         """
-        # Delegate to retrieval pipeline (orchestration only)
+        # Delegate to retrieval pipeline (SelfQueryRetriever handles query optimization)
         return self.pipeline.retrieve(
             query=query,
             view=view,
             language=language,
             top_k=top_k,
             expand_context=expand_context,
-            optimize_query=optimize_query,
         )
 
 
 __all__ = ["SearchUseCase"]
-

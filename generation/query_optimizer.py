@@ -2,15 +2,30 @@
 
 Extracts keywords and hints from user queries to improve search relevance.
 Uses keyword-based approach instead of HyDE for better term matching.
+
+.. deprecated::
+    QueryOptimizer is deprecated. Use ``retrieval.SelfQueryRetrieverWrapper`` instead,
+    which provides automatic metadata filter extraction from natural language queries.
 """
 
 import json
 import re
+import warnings
 from typing import Optional
 
 from .client import LLMClientProtocol
 from .models import OptimizedQuery
 from .prompts import PromptTemplate
+
+# Emit deprecation warning on import
+warnings.warn(
+    "QueryOptimizer is deprecated. Use retrieval.SelfQueryRetrieverWrapper instead "
+    "for automatic metadata filter extraction.",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
+
 
 
 class QueryOptimizer:

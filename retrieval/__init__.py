@@ -14,6 +14,7 @@ from .grouping import ResultGrouper
 from .pipeline import RetrievalPipeline
 from .query import QueryInterpreter
 from .search import SearchResult, VectorSearchEngine
+from .self_query import SelfQueryResult, SelfQueryRetrieverWrapper, create_self_query_retriever
 
 __all__ = [
     # Query
@@ -28,4 +29,8 @@ __all__ = [
     "ResultGrouper",
     # Pipeline
     "RetrievalPipeline",
+    # Self-Query (new)
+    "SelfQueryRetrieverWrapper",
+    "SelfQueryResult",
+    "create_self_query_retriever",
 ]

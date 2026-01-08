@@ -81,10 +81,13 @@ class GenerationPipeline:
         # Stage 2: Prompt construction
         prompt = PromptTemplate.format_rag_prompt(query, context)
 
-        # Add conversation history if available
+        # Add conversation history if available (structured format)
         if conversation and conversation.turns:
             history = conversation.get_history_context()
-            prompt = f"{history}\n\n{prompt}"
+            prompt = (
+                f"=== Previous Conversation ===\n{history}\n\n"
+                f"=== Current Question ===\n{prompt}"
+            )
 
         # Stage 3: LLM generation
         llm_response = self.llm_client.generate(

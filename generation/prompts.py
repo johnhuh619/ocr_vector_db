@@ -100,16 +100,18 @@ Question: {query}"""
             entry += f"Matched Content [{view_label}]:\n{result.content}\n"
 
             # Add related images if any
-            if expanded.related_images:
+            related_images = getattr(expanded, 'related_images', None)
+            if related_images:
                 entry += "\nRelated Images:\n"
-                for img in expanded.related_images:
-                    entry += f"  - {img.alt_text or 'Image'}: {img.image_path}\n"
+                for img in related_images:
+                    entry += f"  - {getattr(img, 'alt_text', 'Image') or 'Image'}: {getattr(img, 'image_path', 'N/A')}\n"
+
 
             context_parts.append(entry)
 
         return PromptContext(
             query="",  # Set by caller
-            retrieved_content="\n" + "=" * 40 + "\n".join(context_parts),
+            retrieved_content="\n" + ("=" * 40 + "\n").join([""] + context_parts),
             source_citations=citations,
         )
 
